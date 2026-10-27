@@ -1,0 +1,39 @@
+# Опционально: полностью контейнеризованный запуск БД и S3-хранилища.
+# Нужен только если вы хотите MinIO/контейнерный MySQL вместо локального
+# сервера MySQL. Приложение запускается с хоста: npm run dev
+#
+#   docker compose up -d
+#
+# Тогда в .env:
+#   DATABASE_URL="mysql://mapbel:mapbel_dev_password@127.0.0.1:3306/mapbel"
+#   FILES_DIR=""  (или настройте S3-драйвер в src/lib/storage.ts)
+
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root_dev_password
+      MYSQL_DATABASE: mapbel
+      MYSQL_USER: mapbel
+      MYSQL_PASSWORD: mapbel_dev_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: mapbel
+      MINIO_ROOT_PASSWORD: mapbel_dev_password
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+
+volumes:
+  mysql-data:
+  minio-data:

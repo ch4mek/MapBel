@@ -1,0 +1,117 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #f7f7f5;
+  --panel: #ffffff;
+  --ink: #1c2733;
+  --muted: #5b6b7b;
+  --line: #e3e8ec;
+  --brand: #176b52;
+  --brand-ink: #ffffff;
+  --danger: #b3382c;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    "Helvetica Neue",
+    Arial,
+    sans-serif;
+  line-height: 1.5;
+}
+
+@layer components {
+  .card {
+    @apply rounded-xl border bg-white;
+    border-color: var(--line);
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-medium transition select-none;
+    @apply disabled:opacity-50 disabled:pointer-events-none;
+    min-height: 40px;
+  }
+  .btn-primary {
+    background: var(--brand);
+    color: var(--brand-ink);
+  }
+  .btn-primary:hover:not(:disabled) {
+    filter: brightness(1.08);
+  }
+  .btn-ghost {
+    @apply border bg-white;
+    border-color: var(--line);
+    color: var(--ink);
+  }
+  .btn-ghost:hover:not(:disabled) {
+    background: #f1f4f6;
+  }
+  .btn-danger {
+    background: var(--danger);
+    color: #fff;
+  }
+  .input {
+    @apply w-full rounded-lg border bg-white px-3 py-2 text-sm outline-none;
+    border-color: var(--line);
+    min-height: 40px;
+  }
+  .input:focus {
+    border-color: var(--brand);
+    box-shadow: 0 0 0 2px rgba(23, 107, 82, 0.15);
+  }
+  .label {
+    @apply mb-1 block text-sm font-medium;
+  }
+  .muted {
+    color: var(--muted);
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium;
+    border-color: var(--line);
+    background: #fff;
+  }
+  .chip-active {
+    background: var(--brand);
+    border-color: var(--brand);
+    color: #fff;
+  }
+}
+
+/* MapLibre popup стили под общую тему */
+.maplibregl-popup-content {
+  padding: 10px 12px !important;
+  border-radius: 12px !important;
+  font-size: 13px;
+}
+
+/* Идентификация меток карты: кнопки с иконкой категории */
+.map-pin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50% 50% 50% 4px;
+  transform: rotate(-45deg);
+  background: #fff;
+  border: 2px solid var(--ink);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  font-size: 14px;
+  cursor: pointer;
+}
+.map-pin > span {
+  transform: rotate(45deg);
+}
+.map-pin.visited {
+  background: var(--brand);
+  border-color: var(--brand);
+}
