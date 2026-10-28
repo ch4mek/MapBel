@@ -163,6 +163,8 @@ model Zone {
   id             String  @id @default(uuid()) @db.Char(36)
   slug           String  @unique
   name           String
+  // Административный район для городских зон («Центральный район» и т.п.)
+  district       String?
   description    String? @db.Text
   // GeoJSON Polygon/MultiPolygon, координаты [lon, lat]
   geometry       Json

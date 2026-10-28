@@ -1,7 +1,8 @@
-// Воспроизводимый seed (раздел 16 ТЗ): демонстрационные игровые зоны в
-// разных частях Беларуси, 30 мест разных категорий, достижения, демо-юзеры,
-// события. ВСЕ игровые сущности помечены isDemo и не претендуют на полный
-// туристический каталог страны. Запуск: npm run db:seed
+// Воспроизводимый seed (раздел 16 ТЗ): Минск разбит на 9 административных
+// районов, внутри районов — игровые зоны; плюс демо-зоны в областях.
+// Границы зон — «волнистые» восьмиугольники, детерминированно построенные
+// из прямоугольной сетки района (гарантированно без пересечений).
+// ВСЕ игровые сущности помечены isDemo, координаты округлены. Запуск: npm run db:seed
 
 import "dotenv/config";
 import bcrypt from "bcryptjs";
@@ -38,8 +39,9 @@ interface SeedPlace {
 interface SeedZone {
   slug: string;
   name: string;
+  district: string;
   description: string;
-  ring: [number, number][]; // [lon, lat]
+  rect: [number, number, number, number]; // lonMin, latMin, lonMax, latMax
   centerLat: number;
   centerLon: number;
   silverThreshold: number;
@@ -47,31 +49,68 @@ interface SeedZone {
   places: SeedPlace[];
 }
 
+/** Границы города/района по прямоугольнику: срезанные углы + лёгкая
+ * «волнистость» граней внутрь (детерминированно от slug). Полигон всегда
+ * внутри прямоугольника — соседние зоны не пересекаются. */
+function makeRing(slug: string, rect: [number, number, number, number]): [number, number][] {
+  const [x1, y1, x2, y2] = rect;
+  const h = Math.abs([...slug].reduce((a, c) => (a * 31 + c.charCodeAt(0)) | 0, 7));
+  const w = x2 - x1;
+  const d = y2 - y1;
+  // Срез углов: 10–20% стороны
+  const cx1 = w * (0.1 + (h % 10) / 100);
+  const cx2 = w * (0.1 + ((h >> 4) % 10) / 100);
+  const cy1 = d * (0.1 + ((h >> 8) % 10) / 100);
+  const cy2 = d * (0.1 + ((h >> 12) % 10) / 100);
+  // Впадины на серединах восточной/западной граней: 0–0.0012° (~130 м)
+  const iE = ((h >> 6) % 10) * 0.00012;
+  const iW = ((h >> 14) % 10) * 0.00012;
+  const midY = (y1 + y2) / 2;
+  return [
+    [x1 + cx1, y1],
+    [x2 - cx1, y1],
+    [x2, y1 + cy1],
+    [x2 - iE, midY],
+    [x2, y2 - cy2],
+    [x2 - cx2, y2],
+    [x1 + cx2, y2],
+    [x1, y2 - cy2],
+    [x1 + iW, midY],
+    [x1, y1 + cy1],
+    [x1 + cx1, y1],
+  ];
+}
+
 const OSM_LICENSE = "© OpenStreetMap contributors (ODbL); координаты округлены";
 const DEMO_LICENSE = "Демонстрационные данные MapBel (учебный проект)";
 
+// Административные районы Минска (в порядке вывода в интерфейсе)
+const D = {
+  central: "Центральный район",
+  sovetsky: "Советский район",
+  pervomaysky: "Первомайский район",
+  partizansky: "Партизанский район",
+  zavodskoy: "Заводской район",
+  leninsky: "Ленинский район",
+  oktyabrsky: "Октябрьский район",
+  moskovsky: "Московский район",
+  frunzensky: "Фрунзенский район",
+  regions: "Области (демо)",
+};
+
 const ZONES: SeedZone[] = [
+  // ===================== ЦЕНТРАЛЬНЫЙ РАЙОН =====================
   {
     slug: "minsk-verkhny-gorod",
     name: "Минск — Верхний город",
+    district: D.central,
     description:
-      "Исторический центр на правом берегу Свислочи: Ратуша, Кафедральный собор, Троицкое предместье, Остров слёз и театральный квартал. Границы зоны повторяют кварталы старого города.",
-    ring: [
-      [27.5515, 53.9060],
-      [27.5560, 53.9075],
-      [27.5635, 53.9095],
-      [27.5645, 53.9055],
-      [27.5620, 53.9010],
-      [27.5590, 53.8992],
-      [27.5540, 53.8990],
-      [27.5500, 53.9020],
-      [27.5498, 53.9055],
-      [27.5515, 53.9060],
-    ],
+      "Исторический центр: Ратуша, Кафедральный собор, Немига, театральный квартал, музеи и квартал «Васильков».",
+    rect: [27.552, 53.8995, 27.5608, 53.9095],
     centerLat: 53.9045,
-    centerLon: 27.5575,
+    centerLon: 27.557,
     silverThreshold: 3,
-    goldMinCount: 5,
+    goldMinCount: 4,
     places: [
       {
         slug: "minsk-ratusha",
@@ -94,51 +133,14 @@ const ZONES: SeedZone[] = [
         goldRequired: true,
       },
       {
-        slug: "minsk-troitskoye",
-        name: "Троицкое предместье",
-        category: "HISTORIC",
-        description:
-          "Исторический квартал на левом берегу Свислочи со зданиями XVI–XX веков, старейший район города. Отсюда начиналась дорога на Троицу.",
-        lat: 53.9058,
-        lon: 27.5625,
-        goldRequired: true,
-      },
-      {
-        slug: "minsk-ostrov-slyoz",
-        name: "Остров слёз",
-        category: "HISTORIC",
-        description:
-          "Искусственный остров на Свислочи с часовней-памятником воинам, погибшим в Афганистане (1996). Одна из самых трогательных точек центра.",
-        lat: 53.9065,
-        lon: 27.5632,
-      },
-      {
         slug: "minsk-teatr-kupaly",
         name: "Театр имени Янки Купалы",
         category: "HISTORIC",
         description:
-          "Старейший театр Беларуси (1890), здание напротив Александровского сквера. В годы войны здесь выступал фронтовой театр.",
+          "Старейший театр Беларуси (1890), здание у Александровского сквера. В годы войны здесь выступал фронтовой театр.",
         lat: 53.9062,
         lon: 27.5588,
-      },
-      {
-        slug: "minsk-teatr-operu",
-        name: "Большой театр оперы и балета",
-        category: "HISTORIC",
-        description:
-          "Национальный академический Большой театр оперы и балета (1933–1939) в парке у Свислочи — один из символов белорусской культуры.",
-        lat: 53.9087,
-        lon: 27.5625,
         goldRequired: true,
-      },
-      {
-        slug: "minsk-hudozhestvenny-muzey",
-        name: "Национальный художественный музей",
-        category: "MUSEUM",
-        description:
-          "Крупнейшее художественное собрание страны: от древней иконописи до белорусского авангарда XX века.",
-        lat: 53.9014,
-        lon: 27.5618,
       },
       {
         slug: "minsk-istoricheskiy-muzey",
@@ -147,7 +149,7 @@ const ZONES: SeedZone[] = [
         description:
           "Крупнейший исторический музей страны: археология, нумизматика, этнография Беларуси.",
         lat: 53.9017,
-        lon: 27.5608,
+        lon: 27.5598,
         goldRequired: true,
       },
       {
@@ -158,6 +160,15 @@ const ZONES: SeedZone[] = [
           "Усадебный дом XIX века, где бывал Адам Мицкевич. Музей Валентия Ваньковича, памятник усадебной архитектуры в центре города.",
         lat: 53.9022,
         lon: 27.5577,
+      },
+      {
+        slug: "minsk-hudozhestvenny-muzey",
+        name: "Национальный художественный музей",
+        category: "MUSEUM",
+        description:
+          "Крупнейшее художественное собрание страны: от древней иконописи до белорусского авангарда XX века.",
+        lat: 53.901,
+        lon: 27.559,
       },
       {
         slug: "minsk-vasilki",
@@ -172,209 +183,14 @@ const ZONES: SeedZone[] = [
     ],
   },
   {
-    slug: "minsk-privokzalnaya",
-    name: "Минск — Привокзальная площадь",
-    description:
-      "Кварталы вокруг железнодорожного вокзала и площади Независимости: Красный костёл, башни «Ворота Минска» и главный корпус БГУ.",
-    ring: [
-      [27.5395, 53.8955],
-      [27.5410, 53.8978],
-      [27.5560, 53.8978],
-      [27.5570, 53.8965],
-      [27.5560, 53.8925],
-      [27.5410, 53.8925],
-      [27.5395, 53.8955],
-    ],
-    centerLat: 53.8955,
-    centerLon: 27.5485,
-    silverThreshold: 2,
-    goldMinCount: 3,
-    places: [
-      {
-        slug: "minsk-krasny-kostel",
-        name: "Красный костёл (костёл Святых Симеона и Елены)",
-        category: "HISTORIC",
-        description:
-          "Неоготический костёл начала XX века из красного кирпича на площади Независимости, памятник в честь Симона и Елены Воловичей.",
-        lat: 53.8953,
-        lon: 27.5480,
-        goldRequired: true,
-      },
-      {
-        slug: "minsk-vokzal-vorota",
-        name: "«Ворота Минска»",
-        category: "HISTORIC",
-        description:
-          "Парные башни у железнодорожного вокзала (1952) с часами и скульптурами. Отсюда гости города традиционно начинают знакомство с Минском.",
-        lat: 53.8958,
-        lon: 27.5502,
-        goldRequired: true,
-      },
-      {
-        slug: "minsk-bgu-main",
-        name: "Главный корпус БГУ",
-        category: "HISTORIC",
-        description:
-          "Памятник сталинской архитектуры (1955) с колоннадой и парком. Символ старейшего университета страны.",
-        lat: 53.8930,
-        lon: 27.5440,
-        goldRequired: true,
-      },
-      {
-        slug: "minsk-muzey-vody",
-        name: "Музей воды",
-        category: "MUSEUM",
-        description:
-          "Старинная водонапорная башня с экспозицией городского водоканала: спуск в подземные галереи и история минского водопровода.",
-        lat: 53.8973,
-        lon: 27.5510,
-      },
-    ],
-  },
-  {
-    slug: "minsk-pobedy",
-    name: "Минск — Площадь Победы",
-    description:
-      "Кварталы вдоль проспекта Независимости от площади Якуба Коласа до ботанического сада: монумент Победы, музей войны и знаменитые фасады.",
-    ring: [
-      [27.5624, 53.9012],
-      [27.5649, 53.9055],
-      [27.5639, 53.9093],
-      [27.5730, 53.9097],
-      [27.5855, 53.9135],
-      [27.5890, 53.9085],
-      [27.5845, 53.9020],
-      [27.5740, 53.9005],
-      [27.5624, 53.9012],
-    ],
-    centerLat: 53.9060,
-    centerLon: 27.5750,
-    silverThreshold: 2,
-    goldMinCount: 4,
-    places: [
-      {
-        slug: "minsk-pobedy-monument",
-        name: "Монумент Победы",
-        category: "HISTORIC",
-        description:
-          "Обелиск на площади Победы (1954) с Вечным огнём и мозаичными мемориальными залами. Один из главных памятников города.",
-        lat: 53.9087,
-        lon: 27.5752,
-        goldRequired: true,
-      },
-      {
-        slug: "minsk-muzey-vov",
-        name: "Музей истории Великой Отечественной войны",
-        category: "MUSEUM",
-        description:
-          "Современный музейный комплекс у стелы «Минск — город-герой», построенный к 70-летию Победы.",
-        lat: 53.9091,
-        lon: 27.5730,
-        goldRequired: true,
-      },
-      {
-        slug: "minsk-kgb",
-        name: "Здание КГБ",
-        category: "UNUSUAL",
-        description:
-          "Фасад в стиле сталинского неоренессанса на углу проспекта Независимости и улицы Козлова — один из самых узнаваемых домов города.",
-        lat: 53.9022,
-        lon: 27.5700,
-      },
-      {
-        slug: "minsk-botanicheskiy-sad",
-        name: "Центральный ботанический сад",
-        category: "NATURE",
-        description:
-          "Один из старейших ботанических садов Европы (1932): оранжереи, дендрарий и пять тысяч видов растений в центре города.",
-        lat: 53.9030,
-        lon: 27.5825,
-        goldRequired: true,
-      },
-      {
-        slug: "minsk-ploshchad-kolasa",
-        name: "Площадь Якуба Коласа",
-        category: "HISTORIC",
-        description:
-          "Ансамбль с памятником классику белорусской литературы и фонтанами с мальчиком и лебедем — традиционное место встреч.",
-        lat: 53.9085,
-        lon: 27.5656,
-        goldRequired: true,
-      },
-    ],
-  },
-  {
-    slug: "minsk-komarovka",
-    name: "Минск — Комаровка и библиотека",
-    description:
-      "Северные кварталы: легендарный Комаровский рынок, парковая зона Челюскинцев и Национальная библиотека — ромб на пересечении эпох.",
-    ring: [
-      [27.5650, 53.9130],
-      [27.5860, 53.9140],
-      [27.6010, 53.9290],
-      [27.5950, 53.9400],
-      [27.5700, 53.9370],
-      [27.5560, 53.9240],
-      [27.5650, 53.9130],
-    ],
-    centerLat: 53.9260,
-    centerLon: 27.5800,
-    silverThreshold: 2,
-    goldMinCount: 3,
-    places: [
-      {
-        slug: "minsk-komarovka",
-        name: "Комаровский рынок",
-        category: "GASTRO",
-        description:
-          "Главный рынок страны: клуни со сметаной, вяленая рыба, белорусские сыры. Гастрономический ритуал минчан с 1980-х.",
-        lat: 53.9253,
-        lon: 27.5755,
-        goldRequired: true,
-      },
-      {
-        slug: "minsk-nlb",
-        name: "Национальная библиотека Беларуси",
-        category: "UNUSUAL",
-        description:
-          "Ромбокубооктаэдр высотой 72 метра — одно из самых необычных зданий страны. Смотровая площадка на крыше.",
-        lat: 53.9316,
-        lon: 27.5867,
-        goldRequired: true,
-      },
-      {
-        slug: "minsk-park-chelyuskincev",
-        name: "Парк Челюскинцев",
-        category: "NATURE",
-        description:
-          "Пейзажный парк бывшей усадьбы Станкевичей с прудами и планетарием. Любимая зелёная зона севера города.",
-        lat: 53.9155,
-        lon: 27.5870,
-        goldRequired: true,
-      },
-    ],
-  },
-  {
     slug: "minsk-nemiga-zapad",
     name: "Минск — Немига и Победителей",
+    district: D.central,
     description:
-      "Западная часть города: стадион «Динамо», Раковское предместье, старейшее Кальварийское кладбище, «Минск-Арена» и водохранилище Дрозды.",
-    ring: [
-      [27.5492, 53.8990],
-      [27.5497, 53.9020],
-      [27.5495, 53.9055],
-      [27.5492, 53.9100],
-      [27.5405, 53.9180],
-      [27.5490, 53.9300],
-      [27.5420, 53.9470],
-      [27.5100, 53.9390],
-      [27.4980, 53.9230],
-      [27.5055, 53.9055],
-      [27.5330, 53.8975],
-      [27.5495, 53.8990],
-    ],
-    centerLat: 53.9200,
-    centerLon: 27.5250,
+      "Запад Центрального района: стадион «Динамо», Раковское предместье, старейшее Кальварийское кладбище и «Минск-Арена».",
+    rect: [27.498, 53.899, 27.5505, 53.948],
+    centerLat: 53.92,
+    centerLon: 27.525,
     silverThreshold: 2,
     goldMinCount: 3,
     places: [
@@ -405,7 +221,7 @@ const ZONES: SeedZone[] = [
         description:
           "Старейшее кладбище города (основано в XVIII веке): надгробия известных минчан и каплица на холме.",
         lat: 53.9128,
-        lon: 27.5200,
+        lon: 27.52,
         goldRequired: true,
       },
       {
@@ -415,36 +231,404 @@ const ZONES: SeedZone[] = [
         description:
           "Главная концертно-спортивная арена страны с велодромом. Вечером подсвечивается разными цветами.",
         lat: 53.9441,
-        lon: 27.5430,
+        lon: 27.543,
       },
+    ],
+  },
+
+  // ===================== ФРУНЗЕНСКИЙ РАЙОН =====================
+  {
+    slug: "minsk-drozdy",
+    name: "Минск — Дрозды и Кунцевщина",
+    district: D.frunzensky,
+    description:
+      "Северо-запад города вдоль водохранилища Дрозды и проспекта Победителей, жилые кварталы Кунцевщины.",
+    rect: [27.435, 53.915, 27.4965, 53.9605],
+    centerLat: 53.94,
+    centerLon: 27.465,
+    silverThreshold: 2,
+    goldMinCount: 2,
+    places: [
       {
         slug: "minsk-drozdy",
         name: "Парк «Дрозды»",
         category: "NATURE",
         description:
           "Парк и пляжи на водохранилище Дрозды — самое близкое к центру место, где минчане «уезжают на море».",
-        lat: 53.9260,
-        lon: 27.5045,
+        lat: 53.928,
+        lon: 27.49,
+        goldRequired: true,
+      },
+      {
+        slug: "minsk-kuntsevshchina-demo",
+        name: "Кунцевщина (демо-точка)",
+        category: "GASTRO",
+        description:
+          "Демонстрационная гастрономическая точка в кварталах Кунцевщины.",
+        lat: 53.944,
+        lon: 27.46,
+        demo: true,
+        goldRequired: true,
       },
     ],
   },
   {
-    slug: "minsk-loshitsa",
-    name: "Минск — Лошица",
+    slug: "minsk-kamennaya-gorka",
+    name: "Минск — Каменная Горка",
+    district: D.frunzensky,
     description:
-      "Юго-восток города: легендарный Лошицкий парк с усадьбой Прушинских, мемориал «Яма» и стрит-арт квартал улицы Октябрьская.",
-    ring: [
-      [27.5600, 53.8972],
-      [27.5725, 53.8990],
-      [27.5850, 53.8985],
-      [27.5900, 53.8870],
-      [27.5780, 53.8760],
-      [27.5580, 53.8820],
-      [27.5570, 53.8918],
-      [27.5615, 53.8958],
+      "Северо-западные спальные кварталы: благоустроенный парк Каменной Горки и Сухарево. Игровые задания готовятся.",
+    rect: [27.4995, 53.949, 27.552, 53.976],
+    centerLat: 53.96,
+    centerLon: 27.525,
+    silverThreshold: 2,
+    goldMinCount: 0,
+    places: [
+      {
+        slug: "minsk-kamennaya-gorka-park",
+        name: "Парк Каменная Горка (демо)",
+        category: "NATURE",
+        description:
+          "Демонстрационная точка: благоустроенный парк в центре жилого района.",
+        lat: 53.97,
+        lon: 27.52,
+        demo: true,
+      },
+      {
+        slug: "minsk-suharevo-demo",
+        name: "Сухарево (демо-точка)",
+        category: "GASTRO",
+        description: "Демонстрационная гастрономическая точка в Сухарево.",
+        lat: 53.953,
+        lon: 27.512,
+        demo: true,
+      },
     ],
-    centerLat: 53.8880,
-    centerLon: 27.5720,
+  },
+
+  // ===================== СОВЕТСКИЙ РАЙОН =====================
+  {
+    slug: "minsk-pobedy",
+    name: "Минск — Площадь Победы",
+    district: D.sovetsky,
+    description:
+      "Кварталы вдоль проспекта Независимости: монумент Победы, музей войны, Ботанический сад, Троицкое предместье и площадь Якуба Коласа.",
+    rect: [27.562, 53.898, 27.5795, 53.9095],
+    centerLat: 53.904,
+    centerLon: 27.571,
+    silverThreshold: 2,
+    goldMinCount: 5,
+    places: [
+      {
+        slug: "minsk-pobedy-monument",
+        name: "Монумент Победы",
+        category: "HISTORIC",
+        description:
+          "Обелиск на площади Победы (1954) с Вечным огнём и мозаичными мемориальными залами. Один из главных памятников города.",
+        lat: 53.9087,
+        lon: 27.5752,
+        goldRequired: true,
+      },
+      {
+        slug: "minsk-muzey-vov",
+        name: "Музей истории Великой Отечественной войны",
+        category: "MUSEUM",
+        description:
+          "Современный музейный комплекс у стелы «Минск — город-герой», построенный к 70-летию Победы.",
+        lat: 53.9091,
+        lon: 27.573,
+        goldRequired: true,
+      },
+      {
+        slug: "minsk-kgb",
+        name: "Здание КГБ",
+        category: "UNUSUAL",
+        description:
+          "Фасад в стиле сталинского неоренессанса на углу проспекта Независимости и улицы Козлова — один из самых узнаваемых домов города.",
+        lat: 53.9022,
+        lon: 27.57,
+      },
+      {
+        slug: "minsk-botanicheskiy-sad",
+        name: "Центральный ботанический сад",
+        category: "NATURE",
+        description:
+          "Один из старейших ботанических садов Европы (1932): оранжереи, дендрарий и пять тысяч видов растений в центре города.",
+        lat: 53.904,
+        lon: 27.577,
+        goldRequired: true,
+      },
+      {
+        slug: "minsk-ploshchad-kolasa",
+        name: "Площадь Якуба Коласа",
+        category: "HISTORIC",
+        description:
+          "Ансамбль с памятником классику белорусской литературы и фонтанами с мальчиком и лебедем — традиционное место встреч.",
+        lat: 53.9085,
+        lon: 27.5656,
+        goldRequired: true,
+      },
+      {
+        slug: "minsk-troitskoye",
+        name: "Троицкое предместье",
+        category: "HISTORIC",
+        description:
+          "Исторический квартал на левом берегу Свислочи со зданиями XVI–XX веков, старейший район города.",
+        lat: 53.9055,
+        lon: 27.5645,
+        goldRequired: true,
+      },
+      {
+        slug: "minsk-ostrov-slyoz",
+        name: "Остров слёз",
+        category: "HISTORIC",
+        description:
+          "Искусственный остров на Свислочи с часовней-памятником воинам, погибшим в Афганистане (1996). Одна из самых трогательных точек центра.",
+        lat: 53.906,
+        lon: 27.565,
+      },
+      {
+        slug: "minsk-teatr-operu",
+        name: "Большой театр оперы и балета",
+        category: "HISTORIC",
+        description:
+          "Национальный академический Большой театр оперы и балета (1933–1939) в парке у Свислочи — один из символов белорусской культуры.",
+        lat: 53.908,
+        lon: 27.5655,
+      },
+      {
+        slug: "minsk-park-gorkogo",
+        name: "Парк Горького",
+        category: "NATURE",
+        description:
+          "Старейший парк Минска (1800) под горой у Свислочи: колесо обозрения, дорожки вдоль реки и старые деревья.",
+        lat: 53.8995,
+        lon: 27.5645,
+      },
+    ],
+  },
+  {
+    slug: "minsk-komarovka",
+    name: "Минск — Комаровка",
+    district: D.sovetsky,
+    description:
+      "Кварталы вокруг легендарного Комаровского рынка — гастрономического сердца города на пересечении улиц Хоружей и Купалы.",
+    rect: [27.553, 53.9105, 27.582, 53.93],
+    centerLat: 53.9205,
+    centerLon: 27.5675,
+    silverThreshold: 2,
+    goldMinCount: 2,
+    places: [
+      {
+        slug: "minsk-komarovka",
+        name: "Комаровский рынок",
+        category: "GASTRO",
+        description:
+          "Главный рынок страны: клуни со сметаной, вяленая рыба, белорусские сыры. Гастрономический ритуал минчан с 1980-х.",
+        lat: 53.9253,
+        lon: 27.5755,
+        goldRequired: true,
+      },
+      {
+        slug: "minsk-horuzhey-demo",
+        name: "Улица Хоружей (демо-точка)",
+        category: "GASTRO",
+        description: "Демонстрационная точка питания на оживлённой улице Хоружей.",
+        lat: 53.918,
+        lon: 27.566,
+        demo: true,
+        goldRequired: true,
+      },
+    ],
+  },
+
+  // ===================== ПЕРВОМАЙСКИЙ РАЙОН =====================
+  {
+    slug: "minsk-chelyuskincev-nlb",
+    name: "Минск — Челюскинцы и НЛБ",
+    district: D.pervomaysky,
+    description:
+      "Северо-восток: пейзажный парк Челюскинцев с планетарием и Национальная библиотека — ромб на пересечении эпох.",
+    rect: [27.5845, 53.902, 27.66, 53.952],
+    centerLat: 53.93,
+    centerLon: 27.62,
+    silverThreshold: 2,
+    goldMinCount: 2,
+    places: [
+      {
+        slug: "minsk-park-chelyuskincev",
+        name: "Парк Челюскинцев",
+        category: "NATURE",
+        description:
+          "Пейзажный парк бывшей усадьбы Станкевичей с прудами и планетарием. Любимая зелёная зона севера города.",
+        lat: 53.9155,
+        lon: 27.587,
+        goldRequired: true,
+      },
+      {
+        slug: "minsk-nlb",
+        name: "Национальная библиотека Беларуси",
+        category: "UNUSUAL",
+        description:
+          "Ромбокубооктаэдр высотой 72 метра — одно из самых необычных зданий страны. Смотровая площадка на крыше.",
+        lat: 53.9316,
+        lon: 27.5867,
+        goldRequired: true,
+      },
+      {
+        slug: "minsk-vostok-demo",
+        name: "Микрорайон Восток (демо-точка)",
+        category: "NATURE",
+        description: "Демонстрационная точка в зелёных кварталах Востока.",
+        lat: 53.938,
+        lon: 27.635,
+        demo: true,
+      },
+    ],
+  },
+  {
+    slug: "minsk-slepyanka",
+    name: "Минск — Слепянский каскад",
+    district: D.pervomaysky,
+    description:
+      "Восточные кварталы вдоль Слепянской водной системы: цепь парков и прудов. Игровые задания готовятся.",
+    rect: [27.585, 53.8875, 27.5885, 53.8995],
+    centerLat: 53.8955,
+    centerLon: 27.5945,
+    silverThreshold: 2,
+    goldMinCount: 0,
+    places: [
+      {
+        slug: "minsk-slepyanka-park-demo",
+        name: "Слепянский каскад (демо-точка)",
+        category: "NATURE",
+        description: "Демонстрационная точка в парках вдоль водной системы.",
+        lat: 53.8935,
+        lon: 27.587,
+        demo: true,
+      },
+      {
+        slug: "minsk-kulman-demo",
+        name: "Улица Кульман (демо-точка)",
+        category: "GASTRO",
+        description: "Демонстрационная точка питания в кварталах Кульман.",
+        lat: 53.8965,
+        lon: 27.587,
+        demo: true,
+      },
+    ],
+  },
+
+  // ===================== ПАРТИЗАНСКИЙ РАЙОН =====================
+  {
+    slug: "minsk-bangalor",
+    name: "Минск — Бангалор и Аквапарк",
+    district: D.partizansky,
+    description:
+      "Восток города: парк «Бангалор» с прокатом и спортивными площадками, республиканский аквапарк и храм Всех Святых.",
+    rect: [27.5903, 53.8755, 27.672, 53.9005],
+    centerLat: 53.885,
+    centerLon: 27.63,
+    silverThreshold: 2,
+    goldMinCount: 3,
+    places: [
+      {
+        slug: "minsk-park-bangalor",
+        name: "Парк «Бангалор»",
+        category: "NATURE",
+        description:
+          "Парк с зонами отдыха и спортивными площадками между Ваупшасова и Калиновского. Назван в честь города-побратима.",
+        lat: 53.89,
+        lon: 27.625,
+        goldRequired: true,
+      },
+      {
+        slug: "minsk-aquapark",
+        name: "Минский аквапарк",
+        category: "UNUSUAL",
+        description:
+          "Один из крупнейших аквапарков Восточной Европы: горки, бассейны и спа-зона круглый год.",
+        lat: 53.88,
+        lon: 27.615,
+        goldRequired: true,
+      },
+      {
+        slug: "minsk-vseh-svyatyh",
+        name: "Храм Всех Святых",
+        category: "HISTORIC",
+        description:
+          "Всехсвятский кафедральный собор (2008–2018) на памятном холме — белый храм, видный издалека.",
+        lat: 53.886,
+        lon: 27.622,
+        goldRequired: true,
+      },
+    ],
+  },
+
+  // ===================== ЗАВОДСКОЙ РАЙОН =====================
+  {
+    slug: "minsk-serebryanka",
+    name: "Минск — Серебрянка",
+    district: D.zavodskoy,
+    description:
+      "Юго-восток: парк Серебрянка с прудами, музей пивоварения «Аліварыя» и кварталы Могилёвского шоссе, мемориал «Тростенец».",
+    rect: [27.609, 53.812, 27.71, 53.874],
+    centerLat: 53.848,
+    centerLon: 27.655,
+    silverThreshold: 2,
+    goldMinCount: 2,
+    places: [
+      {
+        slug: "minsk-park-serebryanka",
+        name: "Парк «Серебрянка»",
+        category: "NATURE",
+        description:
+          "Парк с каскадом прудов в жилом районе Серебрянка — любимое место прогулок юго-востока города.",
+        lat: 53.849,
+        lon: 27.625,
+        goldRequired: true,
+      },
+      {
+        slug: "minsk-alivariya",
+        name: "Музей пивоварения «Аліварыя»",
+        category: "MUSEUM",
+        description:
+          "Музей на территории старейшего пивзавода страны (1894): история минского пивоварения и дегустации.",
+        lat: 53.865,
+        lon: 27.64,
+        goldRequired: true,
+      },
+      {
+        slug: "minsk-trostenets",
+        name: "Мемориал «Тростенец»",
+        category: "HISTORIC",
+        description:
+          "Мемориал на месте крупнейшего лагеря смерти на территории Беларуси (206 тысяч жертв). Открыт в 2015 году.",
+        lat: 53.8465,
+        lon: 27.647,
+      },
+      {
+        slug: "minsk-shabany-demo",
+        name: "Шабаны (демо-точка)",
+        category: "GASTRO",
+        description: "Демонстрационная точка питания в кварталах Шабаны.",
+        lat: 53.83,
+        lon: 27.675,
+        demo: true,
+      },
+    ],
+  },
+
+  // ===================== ЛЕНИНСКИЙ РАЙОН =====================
+  {
+    slug: "minsk-loshitsa",
+    name: "Минск — Лошица и Октябрьская",
+    district: D.leninsky,
+    description:
+      "Юг города: легендарный Лошицкий парк с усадьбой Прушинских, мемориал «Яма» и стрит-арт квартал улицы Октябрьская.",
+    rect: [27.5625, 53.815, 27.5835, 53.8958],
+    centerLat: 53.87,
+    centerLon: 27.5725,
     silverThreshold: 2,
     goldMinCount: 3,
     places: [
@@ -464,8 +648,8 @@ const ZONES: SeedZone[] = [
         category: "HISTORIC",
         description:
           "Памятник жертвам Холокоста (2000) в глубоком овраге, где 2 марта 1942 года было расстреляно около 5000 узников гетто.",
-        lat: 53.8958,
-        lon: 27.5650,
+        lat: 53.892,
+        lon: 27.5655,
         goldRequired: true,
       },
       {
@@ -474,23 +658,141 @@ const ZONES: SeedZone[] = [
         category: "UNUSUAL",
         description:
           "Квартал бывших фабричных корпусов, ставший центром стрит-арта: крупнейшие в стране муралы, бары и гастромаркеты.",
-        lat: 53.8978,
-        lon: 27.5675,
+        lat: 53.894,
+        lon: 27.568,
         goldRequired: true,
       },
     ],
   },
+
+  // ===================== ОКТЯБРЬСКИЙ РАЙОН =====================
+  {
+    slug: "minsk-aerodrom",
+    name: "Минск — Аэродром",
+    district: D.oktyabrsky,
+    description:
+      "Южные кварталы Октябрьского района: Аэродром, Дворище и Курасовщина. Игровые задания готовятся.",
+    rect: [27.515, 53.815, 27.5465, 53.8915],
+    centerLat: 53.855,
+    centerLon: 27.533,
+    silverThreshold: 2,
+    goldMinCount: 0,
+    places: [
+      {
+        slug: "minsk-aerodrom-demo",
+        name: "Аэродром (демо-точка)",
+        category: "GASTRO",
+        description: "Демонстрационная точка питания в кварталах Аэродрома.",
+        lat: 53.864,
+        lon: 27.54,
+        demo: true,
+      },
+      {
+        slug: "minsk-dvorische-demo",
+        name: "Дворище (демо-точка)",
+        category: "NATURE",
+        description: "Демонстрационная зелёная точка в кварталах Дворище.",
+        lat: 53.845,
+        lon: 27.53,
+        demo: true,
+      },
+    ],
+  },
+
+  // ===================== МОСКОВСКИЙ РАЙОН =====================
+  {
+    slug: "minsk-brilevichi",
+    name: "Минск — Брилевичи и Корженевского",
+    district: D.moskovsky,
+    description:
+      "Юго-западные жилые кварталы: Брилевичи, Корженевского и Щорса. Игровые задания готовятся.",
+    rect: [27.44, 53.815, 27.5135, 53.898],
+    centerLat: 53.858,
+    centerLon: 27.478,
+    silverThreshold: 2,
+    goldMinCount: 0,
+    places: [
+      {
+        slug: "minsk-brilevichi-demo",
+        name: "Брилевичи (демо-точка)",
+        category: "NATURE",
+        description: "Демонстрационная зелёная точка в кварталах Брилевичи.",
+        lat: 53.862,
+        lon: 27.478,
+        demo: true,
+      },
+      {
+        slug: "minsk-korzhevskogo-demo",
+        name: "Корженевского (демо-точка)",
+        category: "GASTRO",
+        description: "Демонстрационная точка питания на Корженевского.",
+        lat: 53.878,
+        lon: 27.478,
+        demo: true,
+      },
+    ],
+  },
+  {
+    slug: "minsk-privokzalnaya",
+    name: "Минск — Привокзальная площадь",
+    district: D.moskovsky,
+    description:
+      "Кварталы вокруг железнодорожного вокзала и площади Независимости: Красный костёл, башни «Ворота Минска» и главный корпус БГУ.",
+    rect: [27.533, 53.8928, 27.56, 53.8982],
+    centerLat: 53.8955,
+    centerLon: 27.5475,
+    silverThreshold: 2,
+    goldMinCount: 3,
+    places: [
+      {
+        slug: "minsk-krasny-kostel",
+        name: "Красный костёл (костёл Святых Симеона и Елены)",
+        category: "HISTORIC",
+        description:
+          "Неоготический костёл начала XX века из красного кирпича на площади Независимости, памятник в честь Симона и Елены Воловичей.",
+        lat: 53.8953,
+        lon: 27.548,
+        goldRequired: true,
+      },
+      {
+        slug: "minsk-vokzal-vorota",
+        name: "«Ворота Минска»",
+        category: "HISTORIC",
+        description:
+          "Парные башни у железнодорожного вокзала (1952) с часами и скульптурами. Отсюда гости города традиционно начинают знакомство с Минском.",
+        lat: 53.8958,
+        lon: 27.5502,
+        goldRequired: true,
+      },
+      {
+        slug: "minsk-bgu-main",
+        name: "Главный корпус БГУ",
+        category: "HISTORIC",
+        description:
+          "Памятник сталинской архитектуры (1955) с колоннадой и парком. Символ старейшего университета страны.",
+        lat: 53.8945,
+        lon: 27.5455,
+        goldRequired: true,
+      },
+      {
+        slug: "minsk-muzey-vody",
+        name: "Музей воды",
+        category: "MUSEUM",
+        description:
+          "Старинная водонапорная башня с экспозицией городского водоканала: спуск в подземные галереи и история минского водопровода.",
+        lat: 53.8962,
+        lon: 27.5505,
+      },
+    ],
+  },
+
+  // ===================== ОБЛАСТИ (ДЕМО) =====================
   {
     slug: "mir-zamok",
     name: "Мир — Замковая гора",
+    district: D.regions,
     description: "Демо-зона посёлка Мир с внесённым в список ЮНЕСКО замком.",
-    ring: [
-      [26.46, 53.46],
-      [26.49, 53.46],
-      [26.49, 53.44],
-      [26.46, 53.44],
-      [26.46, 53.46],
-    ],
+    rect: [26.46, 53.46, 26.49, 53.44],
     centerLat: 53.4525,
     centerLon: 26.4725,
     silverThreshold: 2,
@@ -531,14 +833,9 @@ const ZONES: SeedZone[] = [
   {
     slug: "nesvizh-rezidentsiya",
     name: "Несвиж — резиденция Радзивиллов",
+    district: D.regions,
     description: "Демо-зона Несвижа: дворец, фарный костёл и старый город.",
-    ring: [
-      [26.665, 53.23],
-      [26.695, 53.23],
-      [26.695, 53.212],
-      [26.665, 53.212],
-      [26.665, 53.23],
-    ],
+    rect: [26.665, 53.212, 26.695, 53.23],
     centerLat: 53.2224,
     centerLon: 26.6798,
     silverThreshold: 3,
@@ -599,15 +896,10 @@ const ZONES: SeedZone[] = [
   {
     slug: "brest-krepost",
     name: "Брест — крепость над Бугом",
+    district: D.regions,
     description:
       "Демо-зона Брестской крепости. Золото для этой зоны ещё готовится — доступна бронза и серебро.",
-    ring: [
-      [23.63, 52.095],
-      [23.685, 52.095],
-      [23.685, 52.068],
-      [23.63, 52.068],
-      [23.63, 52.095],
-    ],
+    rect: [23.63, 52.068, 23.685, 52.095],
     centerLat: 52.0862,
     centerLon: 23.6573,
     silverThreshold: 2,
@@ -636,15 +928,10 @@ const ZONES: SeedZone[] = [
   {
     slug: "belovezhskaya-pushcha",
     name: "Беловежская пуща — экотропы",
+    district: D.regions,
     description:
       "Демо-зона древнего леса: музей природы, вольеры и экотропа у визит-центра Каменюки.",
-    ring: [
-      [23.82, 52.605],
-      [23.89, 52.605],
-      [23.89, 52.57],
-      [23.82, 52.57],
-      [23.82, 52.605],
-    ],
+    rect: [23.82, 52.57, 23.89, 52.605],
     centerLat: 52.588,
     centerLon: 23.856,
     silverThreshold: 2,
@@ -697,14 +984,9 @@ const ZONES: SeedZone[] = [
   {
     slug: "grodno-korolevskiy",
     name: "Гродно — королевский город",
+    district: D.regions,
     description: "Демо-зона Гродно: два замка и Коложская церковь над Неманом.",
-    ring: [
-      [23.8, 53.688],
-      [23.84, 53.688],
-      [23.84, 53.668],
-      [23.8, 53.668],
-      [23.8, 53.688],
-    ],
+    rect: [23.8, 53.668, 23.84, 53.688],
     centerLat: 53.6784,
     centerLon: 23.8231,
     silverThreshold: 2,
@@ -755,14 +1037,9 @@ const ZONES: SeedZone[] = [
   {
     slug: "braslavskie-ozyora",
     name: "Браславские озёра",
+    district: D.regions,
     description: "Демо-зона национального парка: экотропы, viewpoints и Браслав.",
-    ring: [
-      [26.78, 55.405],
-      [26.95, 55.405],
-      [26.95, 55.3],
-      [26.78, 55.3],
-      [26.78, 55.405],
-    ],
+    rect: [26.78, 55.3, 26.95, 55.405],
     centerLat: 55.365,
     centerLon: 26.856,
     silverThreshold: 2,
@@ -872,11 +1149,9 @@ async function main() {
       create: {
         slug: z.slug,
         name: z.name,
+        district: z.district,
         description: z.description,
-        geometry: {
-          type: "Polygon",
-          coordinates: [z.ring],
-        },
+        geometry: { type: "Polygon", coordinates: [makeRing(z.slug, z.rect)] },
         centerLat: z.centerLat,
         centerLon: z.centerLon,
         silverThreshold: z.silverThreshold,
@@ -885,8 +1160,9 @@ async function main() {
       },
       update: {
         name: z.name,
+        district: z.district,
         description: z.description,
-        geometry: { type: "Polygon", coordinates: [z.ring] },
+        geometry: { type: "Polygon", coordinates: [makeRing(z.slug, z.rect)] },
         centerLat: z.centerLat,
         centerLon: z.centerLon,
         silverThreshold: z.silverThreshold,
@@ -984,8 +1260,8 @@ async function main() {
         startsAt: starts,
         endsAt: new Date(starts.getTime() + 2 * 3600 * 1000),
         placeId: ratusha.id,
-        lat: 53.9041,
-        lon: 27.5618,
+        lat: 53.9045,
+        lon: 27.5575,
         organizer: "MapBel (демо)",
         status: "COMPLETED",
         source: "Демо-данные MapBel",
@@ -1000,7 +1276,7 @@ async function main() {
   }
   console.log("События: 2 (предстоящее + завершённое, демо)");
 
-  console.log("Seed завершён. Золото полностью достижимо в зонах: Минск, Мир, Несвиж, Пуща, Гродно, Браслав.");
+  console.log("Seed завершён. Минск разбит на 9 районов; золото достижимо в демо-зонах.");
 }
 
 main()

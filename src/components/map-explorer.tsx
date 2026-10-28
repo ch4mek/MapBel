@@ -20,6 +20,7 @@ import {
 import type { MapPlaceDTO, MapZoneDTO } from "@/lib/catalog";
 import { PLACE_CATEGORY_LABELS, type PlaceCategoryKey } from "@/lib/place-meta";
 import { RANK_LABELS } from "@/lib/ranks";
+import { shortZoneName } from "@/lib/format";
 import { CategoryBadge, CategoryIcon, CategoryTile } from "@/components/ui/category";
 import { RankBadge, RankLadder, RankMedal, RANK_STYLE } from "@/components/ui/rank";
 import { Pill, ProgressBar } from "@/components/ui/primitives";
@@ -49,6 +50,22 @@ function useIsDesktop(): boolean {
     return () => mq.removeEventListener("change", sync);
   }, []);
   return desktop;
+}
+
+const DISTRICT_ORDER = [
+  "Центральный район",
+  "Советский район",
+  "Первомайский район",
+  "Партизанский район",
+  "Заводской район",
+  "Ленинский район",
+  "Октябрьский район",
+  "Московский район",
+  "Фрунзенский район",
+];
+
+function districtLabel(key: string): string {
+  return key.replace(" район", "");
 }
 
 type GeoState =
@@ -352,7 +369,7 @@ function PanelContent(props: {
     const z = props.zoneById.get(place.zoneId);
     return (
       <div className="animate-fade-in p-4">
-        <BackButton onClick={props.onBack}>{z ? z.name.split(" — ")[0] : "Назад"}</BackButton>
+        <BackButton onClick={props.onBack}>{z ? shortZoneName(z.name) : "Назад"}</BackButton>
         <div className="mt-3 flex items-start gap-3">
           <CategoryTile category={place.category} className="size-14" />
           <div className="min-w-0">
@@ -406,6 +423,9 @@ function PanelContent(props: {
             <h2 className="font-display text-lg leading-snug font-bold text-zinc-900">{zone.name}</h2>
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               <RankBadge rank={zone.status} size="sm" />
+              {zone.district && (
+                <Pill className="py-0.5 text-[11px]">{zone.district}</Pill>
+              )}
               {zone.isDemo && (
                 <Pill tone="demo" className="py-0.5 text-[11px]">
                   Демо-зона
@@ -516,37 +536,62 @@ function PanelContent(props: {
       <h3 className="mt-5 mb-2 flex items-center justify-between text-xs font-bold tracking-wider text-zinc-400 uppercase">
         <span>Игровые зоны · {props.zones.length}</span>
       </h3>
-      <ul className="flex flex-col gap-1.5">
-        {props.zones.map((z) => (
-          <li key={z.id}>
-            <button
-              type="button"
-              onClick={() => props.onZone(z.id)}
-              className="group flex w-full items-center gap-3 rounded-2xl border border-transparent p-2.5 text-left transition hover:border-zinc-200 hover:bg-white"
-            >
-              <RankMedal rank={z.status} className="size-10" />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-semibold text-zinc-900">
-                  {z.name.split(" — ")[0]}
-                </span>
-                <span className="mt-1 flex items-center gap-2">
-                  <ProgressBar value={z.uniquePlaces} max={Math.max(1, z.publishedPlaces)} className="h-1.5" />
-                  <span className="shrink-0 text-[11px] font-medium text-zinc-500">
-                    {z.uniquePlaces}/{z.publishedPlaces}
+      {groupedByDistrict(props.zones).map(([district, list]) => (
+        <div key={district} className="mb-3">
+          <div className="mb-1 px-1 text-[11px] font-bold tracking-wide text-zinc-500">
+            {districtLabel(district)}
+          </div>
+          <ul className="flex flex-col gap-1.5">
+            {list.map((z) => (
+              <li key={z.id}>
+                <button
+                  type="button"
+                  onClick={() => props.onZone(z.id)}
+                  className="group flex w-full items-center gap-3 rounded-2xl border border-transparent p-2.5 text-left transition hover:border-zinc-200 hover:bg-white"
+                >
+                  <RankMedal rank={z.status} className="size-10" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-zinc-900">
+                      {shortZoneName(z.name)}
+                    </span>
+                    <span className="mt-1 flex items-center gap-2">
+                      <ProgressBar value={z.uniquePlaces} max={Math.max(1, z.publishedPlaces)} className="h-1.5" />
+                      <span className="shrink-0 text-[11px] font-medium text-zinc-500">
+                        {z.uniquePlaces}/{z.publishedPlaces}
+                      </span>
+                    </span>
                   </span>
-                </span>
-              </span>
-              <ArrowRight className="size-4 shrink-0 text-zinc-300 transition group-hover:translate-x-0.5 group-hover:text-forest-600" />
-            </button>
-          </li>
-        ))}
-      </ul>
+                  <ArrowRight className="size-4 shrink-0 text-zinc-300 transition group-hover:translate-x-0.5 group-hover:text-forest-600" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
       <p className="mt-4 flex gap-2 rounded-xl bg-amber-50/80 p-3 text-[11px] leading-relaxed text-amber-900">
         <MapPinned className="mt-0.5 size-3.5 shrink-0" aria-hidden />
         Сейчас доступны демонстрационные зоны в разных частях страны. Полное покрытие Беларуси — в работе.
       </p>
     </div>
   );
+}
+
+function groupedByDistrict(zones: MapZoneDTO[]): [string, MapZoneDTO[]][] {
+  const groups = new Map<string, MapZoneDTO[]>();
+  for (const z of zones) {
+    const key = z.district ?? "Другие зоны";
+    const list = groups.get(key) ?? [];
+    list.push(z);
+    groups.set(key, list);
+  }
+  const ordered: [string, MapZoneDTO[]][] = [];
+  for (const d of DISTRICT_ORDER) {
+    if (groups.has(d)) ordered.push([d, groups.get(d)!]);
+  }
+  for (const [key, list] of groups) {
+    if (!DISTRICT_ORDER.includes(key)) ordered.push([key, list]);
+  }
+  return ordered;
 }
 
 function BackButton({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
@@ -560,6 +605,11 @@ function BackButton({ onClick, children }: { onClick: () => void; children: Reac
       <span className="truncate">{children}</span>
     </button>
   );
+}
+
+function zoneZoneLabel(zoneById: Map<string, MapZoneDTO> | undefined, p: MapPlaceDTO): string {
+  const z = zoneById?.get(p.zoneId);
+  return z ? shortZoneName(z.name) : PLACE_CATEGORY_LABELS[p.category];
 }
 
 function PlaceList({
@@ -598,7 +648,7 @@ function PlaceList({
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-semibold text-zinc-900">{p.name}</span>
               <span className="block truncate text-xs text-zinc-500">
-                {zoneById ? zoneById.get(p.zoneId)?.name.split(" — ")[0] : PLACE_CATEGORY_LABELS[p.category]}
+                {zoneZoneLabel(zoneById, p)}
               </span>
             </span>
             <ArrowRight className="size-4 shrink-0 text-zinc-300 transition group-hover:translate-x-0.5 group-hover:text-forest-600" />
