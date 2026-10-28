@@ -1,9 +1,11 @@
-// Воспроизводимый seed (раздел 16 ТЗ): демонстрационные игровые зоны в
-// разных частях Беларуси, 30 мест разных категорий, достижения, демо-юзеры,
-// события. ВСЕ игровые сущности помечены isDemo и не претендуют на полный
-// туристический каталог страны. Запуск: npm run db:seed
+// Воспроизводимый seed (раздел 16 ТЗ): игровые зоны — 6 областей Беларуси
+// (контуры сняты с административной карты, см. prisma/oblasts.geo.json) и
+// Минск как отдельная зона, 58 мест разных категорий, достижения,
+// демо-юзеры, события. ВСЕ игровые сущности помечены isDemo и не претендуют
+// на полный туристический каталог страны. Запуск: npm run db:seed
 
 import "dotenv/config";
+import fs from "node:fs";
 import bcrypt from "bcryptjs";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { PrismaMariaDb } from "@prisma/adapter-mariadb";
@@ -35,11 +37,29 @@ interface SeedPlace {
   goldRequired?: boolean;
 }
 
+interface GeoFile {
+  oblasts: Record<
+    string,
+    {
+      geometry: { type: "MultiPolygon"; coordinates: number[][][][] };
+      center: [number, number];
+    }
+  >;
+  minskRing: number[][];
+  minskCenter: [number, number];
+}
+
+const geo = JSON.parse(
+  fs.readFileSync(new URL("./oblasts.geo.json", import.meta.url), "utf8"),
+) as GeoFile;
+
 interface SeedZone {
   slug: string;
   name: string;
   description: string;
-  ring: [number, number][]; // [lon, lat]
+  /** MultiPolygon координаты; для Минска — одиночное кольцо */
+  rings?: number[][][][];
+  ring?: number[][];
   centerLat: number;
   centerLon: number;
   silverThreshold: number;
@@ -51,27 +71,17 @@ const OSM_LICENSE = "© OpenStreetMap contributors (ODbL); координаты 
 const DEMO_LICENSE = "Демонстрационные данные MapBel (учебный проект)";
 
 const ZONES: SeedZone[] = [
+  // ===================== МИНСК =====================
   {
-    slug: "minsk-verkhny-gorod",
-    name: "Минск — Верхний город",
+    slug: "minsk",
+    name: "Минск",
     description:
-      "Исторический центр на правом берегу Свислочи: Ратуша, Кафедральный собор, Троицкое предместье, Остров слёз и театральный квартал. Границы зоны повторяют кварталы старого города.",
-    ring: [
-      [27.5515, 53.9060],
-      [27.5560, 53.9075],
-      [27.5635, 53.9095],
-      [27.5645, 53.9055],
-      [27.5620, 53.9010],
-      [27.5590, 53.8992],
-      [27.5540, 53.8990],
-      [27.5500, 53.9020],
-      [27.5498, 53.9055],
-      [27.5515, 53.9060],
-    ],
-    centerLat: 53.9045,
-    centerLon: 27.5575,
-    silverThreshold: 3,
-    goldMinCount: 5,
+      "Столица: Верхний город и Троицкое предместье, проспект Независимости, парки и набережные Свислочи. Границы зоны — городская черта.",
+    ring: geo.minskRing,
+    centerLat: geo.minskCenter[0],
+    centerLon: geo.minskCenter[1],
+    silverThreshold: 5,
+    goldMinCount: 6,
     places: [
       {
         slug: "minsk-ratusha",
@@ -91,7 +101,6 @@ const ZONES: SeedZone[] = [
           "Православный кафедральный собор в бывшем бернардинском костёле XVII века. Здесь хранится Минское Евангелие и мощи святой Софии Слуцкой.",
         lat: 53.9028,
         lon: 27.5565,
-        goldRequired: true,
       },
       {
         slug: "minsk-troitskoye",
@@ -148,7 +157,6 @@ const ZONES: SeedZone[] = [
           "Крупнейший исторический музей страны: археология, нумизматика, этнография Беларуси.",
         lat: 53.9017,
         lon: 27.5608,
-        goldRequired: true,
       },
       {
         slug: "minsk-dom-vankovich",
@@ -169,27 +177,6 @@ const ZONES: SeedZone[] = [
         lon: 27.5543,
         demo: true,
       },
-    ],
-  },
-  {
-    slug: "minsk-privokzalnaya",
-    name: "Минск — Привокзальная площадь",
-    description:
-      "Кварталы вокруг железнодорожного вокзала и площади Независимости: Красный костёл, башни «Ворота Минска» и главный корпус БГУ.",
-    ring: [
-      [27.5395, 53.8955],
-      [27.5410, 53.8978],
-      [27.5560, 53.8978],
-      [27.5570, 53.8965],
-      [27.5560, 53.8925],
-      [27.5410, 53.8925],
-      [27.5395, 53.8955],
-    ],
-    centerLat: 53.8955,
-    centerLon: 27.5485,
-    silverThreshold: 2,
-    goldMinCount: 3,
-    places: [
       {
         slug: "minsk-krasny-kostel",
         name: "Красный костёл (костёл Святых Симеона и Елены)",
@@ -197,7 +184,7 @@ const ZONES: SeedZone[] = [
         description:
           "Неоготический костёл начала XX века из красного кирпича на площади Независимости, памятник в честь Симона и Елены Воловичей.",
         lat: 53.8953,
-        lon: 27.5480,
+        lon: 27.548,
         goldRequired: true,
       },
       {
@@ -208,7 +195,6 @@ const ZONES: SeedZone[] = [
           "Парные башни у железнодорожного вокзала (1952) с часами и скульптурами. Отсюда гости города традиционно начинают знакомство с Минском.",
         lat: 53.8958,
         lon: 27.5502,
-        goldRequired: true,
       },
       {
         slug: "minsk-bgu-main",
@@ -216,9 +202,8 @@ const ZONES: SeedZone[] = [
         category: "HISTORIC",
         description:
           "Памятник сталинской архитектуры (1955) с колоннадой и парком. Символ старейшего университета страны.",
-        lat: 53.8930,
-        lon: 27.5440,
-        goldRequired: true,
+        lat: 53.893,
+        lon: 27.544,
       },
       {
         slug: "minsk-muzey-vody",
@@ -227,31 +212,8 @@ const ZONES: SeedZone[] = [
         description:
           "Старинная водонапорная башня с экспозицией городского водоканала: спуск в подземные галереи и история минского водопровода.",
         lat: 53.8973,
-        lon: 27.5510,
+        lon: 27.551,
       },
-    ],
-  },
-  {
-    slug: "minsk-pobedy",
-    name: "Минск — Площадь Победы",
-    description:
-      "Кварталы вдоль проспекта Независимости от площади Якуба Коласа до ботанического сада: монумент Победы, музей войны и знаменитые фасады.",
-    ring: [
-      [27.5624, 53.9012],
-      [27.5649, 53.9055],
-      [27.5639, 53.9093],
-      [27.5730, 53.9097],
-      [27.5855, 53.9135],
-      [27.5890, 53.9085],
-      [27.5845, 53.9020],
-      [27.5740, 53.9005],
-      [27.5624, 53.9012],
-    ],
-    centerLat: 53.9060,
-    centerLon: 27.5750,
-    silverThreshold: 2,
-    goldMinCount: 4,
-    places: [
       {
         slug: "minsk-pobedy-monument",
         name: "Монумент Победы",
@@ -269,8 +231,7 @@ const ZONES: SeedZone[] = [
         description:
           "Современный музейный комплекс у стелы «Минск — город-герой», построенный к 70-летию Победы.",
         lat: 53.9091,
-        lon: 27.5730,
-        goldRequired: true,
+        lon: 27.573,
       },
       {
         slug: "minsk-kgb",
@@ -279,7 +240,7 @@ const ZONES: SeedZone[] = [
         description:
           "Фасад в стиле сталинского неоренессанса на углу проспекта Независимости и улицы Козлова — один из самых узнаваемых домов города.",
         lat: 53.9022,
-        lon: 27.5700,
+        lon: 27.57,
       },
       {
         slug: "minsk-botanicheskiy-sad",
@@ -287,9 +248,8 @@ const ZONES: SeedZone[] = [
         category: "NATURE",
         description:
           "Один из старейших ботанических садов Европы (1932): оранжереи, дендрарий и пять тысяч видов растений в центре города.",
-        lat: 53.9030,
+        lat: 53.903,
         lon: 27.5825,
-        goldRequired: true,
       },
       {
         slug: "minsk-ploshchad-kolasa",
@@ -299,29 +259,7 @@ const ZONES: SeedZone[] = [
           "Ансамбль с памятником классику белорусской литературы и фонтанами с мальчиком и лебедем — традиционное место встреч.",
         lat: 53.9085,
         lon: 27.5656,
-        goldRequired: true,
       },
-    ],
-  },
-  {
-    slug: "minsk-komarovka",
-    name: "Минск — Комаровка и библиотека",
-    description:
-      "Северные кварталы: легендарный Комаровский рынок, парковая зона Челюскинцев и Национальная библиотека — ромб на пересечении эпох.",
-    ring: [
-      [27.5650, 53.9130],
-      [27.5860, 53.9140],
-      [27.6010, 53.9290],
-      [27.5950, 53.9400],
-      [27.5700, 53.9370],
-      [27.5560, 53.9240],
-      [27.5650, 53.9130],
-    ],
-    centerLat: 53.9260,
-    centerLon: 27.5800,
-    silverThreshold: 2,
-    goldMinCount: 3,
-    places: [
       {
         slug: "minsk-komarovka",
         name: "Комаровский рынок",
@@ -349,35 +287,8 @@ const ZONES: SeedZone[] = [
         description:
           "Пейзажный парк бывшей усадьбы Станкевичей с прудами и планетарием. Любимая зелёная зона севера города.",
         lat: 53.9155,
-        lon: 27.5870,
-        goldRequired: true,
+        lon: 27.587,
       },
-    ],
-  },
-  {
-    slug: "minsk-nemiga-zapad",
-    name: "Минск — Немига и Победителей",
-    description:
-      "Западная часть города: стадион «Динамо», Раковское предместье, старейшее Кальварийское кладбище, «Минск-Арена» и водохранилище Дрозды.",
-    ring: [
-      [27.5492, 53.8990],
-      [27.5497, 53.9020],
-      [27.5495, 53.9055],
-      [27.5492, 53.9100],
-      [27.5405, 53.9180],
-      [27.5490, 53.9300],
-      [27.5420, 53.9470],
-      [27.5100, 53.9390],
-      [27.4980, 53.9230],
-      [27.5055, 53.9055],
-      [27.5330, 53.8975],
-      [27.5495, 53.8990],
-    ],
-    centerLat: 53.9200,
-    centerLon: 27.5250,
-    silverThreshold: 2,
-    goldMinCount: 3,
-    places: [
       {
         slug: "minsk-dinamo",
         name: "Стадион «Динамо»",
@@ -386,7 +297,6 @@ const ZONES: SeedZone[] = [
           "Национальный олимпийский стадион (открыт в 1934-м), старейшая спортивная арена страны после полной реконструкции.",
         lat: 53.9034,
         lon: 27.5466,
-        goldRequired: true,
       },
       {
         slug: "minsk-petro-pavlovskiy-sobor",
@@ -396,7 +306,6 @@ const ZONES: SeedZone[] = [
           "Бывший бернардинский костёл середины XVII века в старинном Раковском предместье — районе ремесленников и купцов.",
         lat: 53.9078,
         lon: 27.5488,
-        goldRequired: true,
       },
       {
         slug: "minsk-kalvariya",
@@ -405,8 +314,7 @@ const ZONES: SeedZone[] = [
         description:
           "Старейшее кладбище города (основано в XVIII веке): надгробия известных минчан и каплица на холме.",
         lat: 53.9128,
-        lon: 27.5200,
-        goldRequired: true,
+        lon: 27.52,
       },
       {
         slug: "minsk-arena",
@@ -415,7 +323,7 @@ const ZONES: SeedZone[] = [
         description:
           "Главная концертно-спортивная арена страны с велодромом. Вечером подсвечивается разными цветами.",
         lat: 53.9441,
-        lon: 27.5430,
+        lon: 27.543,
       },
       {
         slug: "minsk-drozdy",
@@ -423,31 +331,9 @@ const ZONES: SeedZone[] = [
         category: "NATURE",
         description:
           "Парк и пляжи на водохранилище Дрозды — самое близкое к центру место, где минчане «уезжают на море».",
-        lat: 53.9260,
+        lat: 53.926,
         lon: 27.5045,
       },
-    ],
-  },
-  {
-    slug: "minsk-loshitsa",
-    name: "Минск — Лошица",
-    description:
-      "Юго-восток города: легендарный Лошицкий парк с усадьбой Прушинских, мемориал «Яма» и стрит-арт квартал улицы Октябрьская.",
-    ring: [
-      [27.5600, 53.8972],
-      [27.5725, 53.8990],
-      [27.5850, 53.8985],
-      [27.5900, 53.8870],
-      [27.5780, 53.8760],
-      [27.5580, 53.8820],
-      [27.5570, 53.8918],
-      [27.5615, 53.8958],
-    ],
-    centerLat: 53.8880,
-    centerLon: 27.5720,
-    silverThreshold: 2,
-    goldMinCount: 3,
-    places: [
       {
         slug: "minsk-loshitsa",
         name: "Лошицкий парк и усадьба Прушинских",
@@ -465,8 +351,7 @@ const ZONES: SeedZone[] = [
         description:
           "Памятник жертвам Холокоста (2000) в глубоком овраге, где 2 марта 1942 года было расстреляно около 5000 узников гетто.",
         lat: 53.8958,
-        lon: 27.5650,
-        goldRequired: true,
+        lon: 27.565,
       },
       {
         slug: "minsk-oktyabrskaya",
@@ -476,142 +361,20 @@ const ZONES: SeedZone[] = [
           "Квартал бывших фабричных корпусов, ставший центром стрит-арта: крупнейшие в стране муралы, бары и гастромаркеты.",
         lat: 53.8978,
         lon: 27.5675,
-        goldRequired: true,
       },
     ],
   },
+  // ===================== БРЕСТСКАЯ ОБЛАСТЬ =====================
   {
-    slug: "mir-zamok",
-    name: "Мир — Замковая гора",
-    description: "Демо-зона посёлка Мир с внесённым в список ЮНЕСКО замком.",
-    ring: [
-      [26.46, 53.46],
-      [26.49, 53.46],
-      [26.49, 53.44],
-      [26.46, 53.44],
-      [26.46, 53.46],
-    ],
-    centerLat: 53.4525,
-    centerLon: 26.4725,
-    silverThreshold: 2,
-    goldMinCount: 3,
-    places: [
-      {
-        slug: "mir-castle",
-        name: "Мирский замок",
-        category: "CASTLE",
-        description:
-          "Замок XVI века, объект Всемирного наследия ЮНЕСКО. Готика, ренессанс и барокко в одном ансамбле; в замке работает музей.",
-        lat: 53.4525,
-        lon: 26.4725,
-        goldRequired: true,
-      },
-      {
-        slug: "mir-nikolskaya-cerkov",
-        name: "Никольская церковь (Мир)",
-        category: "HISTORIC",
-        description:
-          "Каменная православная церковь конца XVI века рядом с замком, памятник белорусского зодчества.",
-        lat: 53.452,
-        lon: 26.474,
-        goldRequired: true,
-      },
-      {
-        slug: "mir-sinagoga",
-        name: "Мирская синагога",
-        category: "HISTORIC",
-        description:
-          "Одна из старейших синагог Беларуси (XVI–XVII вв.), восстановленное здание в исторической части посёлка.",
-        lat: 53.4515,
-        lon: 26.471,
-        goldRequired: true,
-      },
-    ],
-  },
-  {
-    slug: "nesvizh-rezidentsiya",
-    name: "Несвиж — резиденция Радзивиллов",
-    description: "Демо-зона Несвижа: дворец, фарный костёл и старый город.",
-    ring: [
-      [26.665, 53.23],
-      [26.695, 53.23],
-      [26.695, 53.212],
-      [26.665, 53.212],
-      [26.665, 53.23],
-    ],
-    centerLat: 53.2224,
-    centerLon: 26.6798,
-    silverThreshold: 3,
-    goldMinCount: 4,
-    places: [
-      {
-        slug: "nesvizh-castle",
-        name: "Несвижский дворцово-парковый комплекс",
-        category: "CASTLE",
-        description:
-          "Резиденция рода Радзивиллов, объект Всемирного наследия ЮНЕСКО. Дворец XVI века с парком и системой укреплений.",
-        lat: 53.2224,
-        lon: 26.6798,
-        goldRequired: true,
-      },
-      {
-        slug: "nesvizh-farny-kostel",
-        name: "Фарный костёл Божьего Тела",
-        category: "HISTORIC",
-        description:
-          "Первый в Восточной Европе храм в стиле барокко (1587–1593), усыпальница Радзивиллов, объект ЮНЕСКО.",
-        lat: 53.2235,
-        lon: 26.68,
-        goldRequired: true,
-      },
-      {
-        slug: "nesvizh-ratusha",
-        name: "Несвижская ратуша",
-        category: "HISTORIC",
-        description:
-          "Одна из старейших ратуш Беларуси, символ магдебургского права города.",
-        lat: 53.2246,
-        lon: 26.6785,
-        goldRequired: true,
-      },
-      {
-        slug: "nesvizh-slutskaya-brama",
-        name: "Слуцкая брама",
-        category: "HISTORIC",
-        description:
-          "Часовня-брама XVI–XVII веков, памятник оборонного зодчества Несвижа.",
-        lat: 53.2235,
-        lon: 26.676,
-        goldRequired: true,
-      },
-      {
-        slug: "nesvizh-gastro",
-        name: "Гастрономическая точка Несвижа (демо)",
-        category: "GASTRO",
-        description:
-          "Демонстрационная точка питания рядом с дворцовым комплексом. Проверяйте актуальные заведения перед поездкой.",
-        lat: 53.2218,
-        lon: 26.6792,
-        demo: true,
-      },
-    ],
-  },
-  {
-    slug: "brest-krepost",
-    name: "Брест — крепость над Бугом",
+    slug: "brestskaya-oblast",
+    name: "Брестская область",
     description:
-      "Демо-зона Брестской крепости. Золото для этой зоны ещё готовится — доступна бронза и серебро.",
-    ring: [
-      [23.63, 52.095],
-      [23.685, 52.095],
-      [23.685, 52.068],
-      [23.63, 52.068],
-      [23.63, 52.095],
-    ],
-    centerLat: 52.0862,
-    centerLon: 23.6573,
-    silverThreshold: 2,
-    goldMinCount: 0,
+      "Юго-запад страны: Брестская крепость над Бугом, Беловежская пуща с зубрами и полесские просторы.",
+    rings: geo.oblasts.brestskaya.geometry.coordinates,
+    centerLat: geo.oblasts.brestskaya.center[0],
+    centerLon: geo.oblasts.brestskaya.center[1],
+    silverThreshold: 3,
+    goldMinCount: 2,
     places: [
       {
         slug: "brest-memorial",
@@ -621,6 +384,7 @@ const ZONES: SeedZone[] = [
           "Мемориальный комплекс «Героям обороны», открыт в 1971 году: Холмские ворота, монумент «Мужество», штык-обелиск.",
         lat: 52.0862,
         lon: 23.6573,
+        goldRequired: true,
       },
       {
         slug: "brest-muzey-oborony",
@@ -631,25 +395,6 @@ const ZONES: SeedZone[] = [
         lat: 52.0873,
         lon: 23.6565,
       },
-    ],
-  },
-  {
-    slug: "belovezhskaya-pushcha",
-    name: "Беловежская пуща — экотропы",
-    description:
-      "Демо-зона древнего леса: музей природы, вольеры и экотропа у визит-центра Каменюки.",
-    ring: [
-      [23.82, 52.605],
-      [23.89, 52.605],
-      [23.89, 52.57],
-      [23.82, 52.57],
-      [23.82, 52.605],
-    ],
-    centerLat: 52.588,
-    centerLon: 23.856,
-    silverThreshold: 2,
-    goldMinCount: 3,
-    places: [
       {
         slug: "pushcha-muzey-prirody",
         name: "Музей природы (Беловежская пуща)",
@@ -670,7 +415,6 @@ const ZONES: SeedZone[] = [
         lon: 23.853,
         checkpointLat: 52.5871,
         checkpointLon: 23.8524,
-        goldRequired: true,
       },
       {
         slug: "pushcha-volery",
@@ -680,7 +424,6 @@ const ZONES: SeedZone[] = [
           "Экспозиция вольеров с зубрами, оленями и другими животными пущи рядом с музеем природы.",
         lat: 52.598,
         lon: 23.848,
-        goldRequired: true,
       },
       {
         slug: "pushcha-birdpoint",
@@ -694,78 +437,16 @@ const ZONES: SeedZone[] = [
       },
     ],
   },
+  // ===================== ВИТЕБСКАЯ ОБЛАСТЬ =====================
   {
-    slug: "grodno-korolevskiy",
-    name: "Гродно — королевский город",
-    description: "Демо-зона Гродно: два замка и Коложская церковь над Неманом.",
-    ring: [
-      [23.8, 53.688],
-      [23.84, 53.688],
-      [23.84, 53.668],
-      [23.8, 53.668],
-      [23.8, 53.688],
-    ],
-    centerLat: 53.6784,
-    centerLon: 23.8231,
-    silverThreshold: 2,
-    goldMinCount: 3,
-    places: [
-      {
-        slug: "grodno-stary-zamok",
-        name: "Старый замок (Гродно)",
-        category: "CASTLE",
-        description:
-          "Замок на берегу Немана, резиденция Стефана Батория; старейший замок Беларуси с фундаментами XI века.",
-        lat: 53.6784,
-        lon: 23.8231,
-        goldRequired: true,
-      },
-      {
-        slug: "grodno-kolozha",
-        name: "Коложская церковь",
-        category: "HISTORIC",
-        description:
-          "Церковь XII века — шедевр древнебелорусского зодчества с уникальной техникой кладки «в crosses» и голосниками в стенах.",
-        lat: 53.674,
-        lon: 23.83,
-        goldRequired: true,
-      },
-      {
-        slug: "grodno-novyy-zamok",
-        name: "Новый замок (Гродно)",
-        category: "HISTORIC",
-        description:
-          "Дворец XVIII века, где проходил «немой сейм»; сегодня здесь краеведческая экспозиция.",
-        lat: 53.6785,
-        lon: 23.8245,
-        goldRequired: true,
-      },
-      {
-        slug: "grodno-gastro",
-        name: "Гастрономическая точка Гродно (демо)",
-        category: "GASTRO",
-        description:
-          "Демонстрационная точка со старобелорусской кухней в центре Гродно.",
-        lat: 53.6772,
-        lon: 23.8272,
-        demo: true,
-      },
-    ],
-  },
-  {
-    slug: "braslavskie-ozyora",
-    name: "Браславские озёра",
-    description: "Демо-зона национального парка: экотропы, viewpoints и Браслав.",
-    ring: [
-      [26.78, 55.405],
-      [26.95, 55.405],
-      [26.95, 55.3],
-      [26.78, 55.3],
-      [26.78, 55.405],
-    ],
-    centerLat: 55.365,
-    centerLon: 26.856,
-    silverThreshold: 2,
+    slug: "vitebskaya-oblast",
+    name: "Витебская область",
+    description:
+      "Белорусское Поозерье: Браславские озёра с грядами холмов, Полоцк с Софийским собором и Витебск Марка Шагала.",
+    rings: geo.oblasts.vitebskaya.geometry.coordinates,
+    centerLat: geo.oblasts.vitebskaya.center[0],
+    centerLon: geo.oblasts.vitebskaya.center[1],
+    silverThreshold: 3,
     goldMinCount: 3,
     places: [
       {
@@ -797,7 +478,6 @@ const ZONES: SeedZone[] = [
         lat: 55.365,
         lon: 26.85,
         demo: true,
-        goldRequired: true,
       },
       {
         slug: "braslav-gastro",
@@ -807,6 +487,233 @@ const ZONES: SeedZone[] = [
         lat: 55.368,
         lon: 26.855,
         demo: true,
+      },
+    ],
+  },
+  // ===================== ГОМЕЛЬСКАЯ ОБЛАСТЬ =====================
+  {
+    slug: "gomelskaya-oblast",
+    name: "Гомельская область",
+    description:
+      "Полесская глубинка: дворец Румянцевых-Паскевичей в Гомеле, Мозырская замковая гора и вековые леса над Припятью.",
+    rings: geo.oblasts.gomelskaya.geometry.coordinates,
+    centerLat: geo.oblasts.gomelskaya.center[0],
+    centerLon: geo.oblasts.gomelskaya.center[1],
+    silverThreshold: 2,
+    goldMinCount: 1,
+    places: [
+      {
+        slug: "gomel-palace",
+        name: "Дворец Румянцевых-Паскевичей",
+        category: "CASTLE",
+        description:
+          "Парадная резиденция XVIII–XIX веков над Сожем с парком и библиотекой; визитная карточка Гомеля.",
+        lat: 52.4278,
+        lon: 30.973,
+        goldRequired: true,
+      },
+      {
+        slug: "gomel-sobor-petra-pavla",
+        name: "Собор святых Апостолов Петра и Павла",
+        category: "HISTORIC",
+        description:
+          "Классицистический собор в центре Гомеля (1809–1824), построенный по проекту архитектора Кларка для графа Румянцева.",
+        lat: 52.4391,
+        lon: 30.9842,
+      },
+      {
+        slug: "mozyr-zamok",
+        name: "Мозырский замок",
+        category: "CASTLE",
+        description:
+          "Реконструированный замок XV–XVIII веков на Замковой горе Мозыря с смотровой площадкой над Припятью.",
+        lat: 52.0512,
+        lon: 29.2344,
+      },
+    ],
+  },
+  // ===================== ГРОДНЕНСКАЯ ОБЛАСТЬ =====================
+  {
+    slug: "grodnenskaya-oblast",
+    name: "Гродненская область",
+    description:
+      "Запад страны: королевский Гродно с двумя замками, ЮНЕСКО-овский Мирский замок и костёлы на Немане.",
+    rings: geo.oblasts.grodnenskaya.geometry.coordinates,
+    centerLat: geo.oblasts.grodnenskaya.center[0],
+    centerLon: geo.oblasts.grodnenskaya.center[1],
+    silverThreshold: 4,
+    goldMinCount: 3,
+    places: [
+      {
+        slug: "grodno-stary-zamok",
+        name: "Старый замок (Гродно)",
+        category: "CASTLE",
+        description:
+          "Замок на берегу Немана, резиденция Стефана Батория; старейший замок Беларуси с фундаментами XI века.",
+        lat: 53.6784,
+        lon: 23.8231,
+        goldRequired: true,
+      },
+      {
+        slug: "grodno-kolozha",
+        name: "Коложская церковь",
+        category: "HISTORIC",
+        description:
+          "Церковь XII века — шедевр древнебелорусского зодчества с уникальной техникой кладки «в crosses» и голосниками в стенах.",
+        lat: 53.674,
+        lon: 23.83,
+        goldRequired: true,
+      },
+      {
+        slug: "grodno-novyy-zamok",
+        name: "Новый замок (Гродно)",
+        category: "HISTORIC",
+        description:
+          "Дворец XVIII века, где проходил «немой сейм»; сегодня здесь краеведческая экспозиция.",
+        lat: 53.6785,
+        lon: 23.8245,
+      },
+      {
+        slug: "grodno-gastro",
+        name: "Гастрономическая точка Гродно (демо)",
+        category: "GASTRO",
+        description:
+          "Демонстрационная точка со старобелорусской кухней в центре Гродно.",
+        lat: 53.6772,
+        lon: 23.8272,
+        demo: true,
+      },
+      {
+        slug: "mir-castle",
+        name: "Мирский замок",
+        category: "CASTLE",
+        description:
+          "Замок XVI века, объект Всемирного наследия ЮНЕСКО. Готика, ренессанс и барокко в одном ансамбле; в замке работает музей.",
+        lat: 53.4525,
+        lon: 26.4725,
+        goldRequired: true,
+      },
+      {
+        slug: "mir-nikolskaya-cerkov",
+        name: "Никольская церковь (Мир)",
+        category: "HISTORIC",
+        description:
+          "Каменная православная церковь конца XVI века рядом с замком, памятник белорусского зодчества.",
+        lat: 53.452,
+        lon: 26.474,
+      },
+      {
+        slug: "mir-sinagoga",
+        name: "Мирская синагога",
+        category: "HISTORIC",
+        description:
+          "Одна из старейших синагог Беларуси (XVI–XVII вв.), восстановленное здание в исторической части посёлка.",
+        lat: 53.4515,
+        lon: 26.471,
+      },
+    ],
+  },
+  // ===================== МИНСКАЯ ОБЛАСТЬ =====================
+  {
+    slug: "minskaya-oblast",
+    name: "Минская область",
+    description:
+      "Центр страны вокруг столицы: Несвиж с резиденцией Радзивиллов, Слуцкая брама и старые местечки.",
+    rings: geo.oblasts.minskaya.geometry.coordinates,
+    centerLat: geo.oblasts.minskaya.center[0],
+    centerLon: geo.oblasts.minskaya.center[1],
+    silverThreshold: 3,
+    goldMinCount: 2,
+    places: [
+      {
+        slug: "nesvizh-castle",
+        name: "Несвижский дворцово-парковый комплекс",
+        category: "CASTLE",
+        description:
+          "Резиденция рода Радзивиллов, объект Всемирного наследия ЮНЕСКО. Дворец XVI века с парком и системой укреплений.",
+        lat: 53.2224,
+        lon: 26.6798,
+        goldRequired: true,
+      },
+      {
+        slug: "nesvizh-farny-kostel",
+        name: "Фарный костёл Божьего Тела",
+        category: "HISTORIC",
+        description:
+          "Первый в Восточной Европе храм в стиле барокко (1587–1593), усыпальница Радзивиллов, объект ЮНЕСКО.",
+        lat: 53.2235,
+        lon: 26.68,
+        goldRequired: true,
+      },
+      {
+        slug: "nesvizh-ratusha",
+        name: "Несвижская ратуша",
+        category: "HISTORIC",
+        description:
+          "Одна из старейших ратуш Беларуси, символ магдебургского права города.",
+        lat: 53.2246,
+        lon: 26.6785,
+      },
+      {
+        slug: "nesvizh-slutskaya-brama",
+        name: "Слуцкая брама",
+        category: "HISTORIC",
+        description:
+          "Часовня-брама XVI–XVII веков, памятник оборонного зодчества Несвижа.",
+        lat: 53.2235,
+        lon: 26.676,
+      },
+      {
+        slug: "nesvizh-gastro",
+        name: "Гастрономическая точка Несвижа (демо)",
+        category: "GASTRO",
+        description:
+          "Демонстрационная точка питания рядом с дворцовым комплексом. Проверяйте актуальные заведения перед поездкой.",
+        lat: 53.2218,
+        lon: 26.6792,
+        demo: true,
+      },
+    ],
+  },
+  // ===================== МОГИЛЁВСКАЯ ОБЛАСТЬ =====================
+  {
+    slug: "mogilyovskaya-oblast",
+    name: "Могилёвская область",
+    description:
+      "Восток страны: Могилёв с ратушей и Свято-Никольским монастырём, Буйничское поле над Днепром.",
+    rings: geo.oblasts.mogilyovskaya.geometry.coordinates,
+    centerLat: geo.oblasts.mogilyovskaya.center[0],
+    centerLon: geo.oblasts.mogilyovskaya.center[1],
+    silverThreshold: 2,
+    goldMinCount: 1,
+    places: [
+      {
+        slug: "mogilev-ratusha",
+        name: "Могилёвская ратуша",
+        category: "HISTORIC",
+        description:
+          "Ратуша XVII–XVIII веков — символ самоуправления Могилёва, самая высокая в стране смотровая башня среди ратуш.",
+        lat: 53.8991,
+        lon: 30.3344,
+        goldRequired: true,
+      },
+      {
+        slug: "mogilev-nikolskaya-cerkov",
+        name: "Свято-Никольский монастырь",
+        category: "HISTORIC",
+        description:
+          "Ансамбль XVII века с Николаевской церковью — жемчужина белорусского барокко на Днепре.",
+        lat: 53.9043,
+        lon: 30.3505,
+      },
+      {
+        slug: "buinichskoe-pole",
+        name: "Буйничское поле",
+        category: "HISTORIC",
+        description:
+          "Мемориал обороны 1941 года под Могилёвом, воспетый в «Живых и мёртвых» Константина Симонова.",
+        lat: 53.8631,
+        lon: 30.2847,
       },
     ],
   },
@@ -867,16 +774,16 @@ async function main() {
   // Зоны и места
   let placeCount = 0;
   for (const z of ZONES) {
+    const geometry = z.ring
+      ? { type: "Polygon", coordinates: [z.ring] }
+      : { type: "MultiPolygon", coordinates: z.rings };
     const zone = await prisma.zone.upsert({
       where: { slug: z.slug },
       create: {
         slug: z.slug,
         name: z.name,
         description: z.description,
-        geometry: {
-          type: "Polygon",
-          coordinates: [z.ring],
-        },
+        geometry,
         centerLat: z.centerLat,
         centerLon: z.centerLon,
         silverThreshold: z.silverThreshold,
@@ -886,7 +793,7 @@ async function main() {
       update: {
         name: z.name,
         description: z.description,
-        geometry: { type: "Polygon", coordinates: [z.ring] },
+        geometry,
         centerLat: z.centerLat,
         centerLon: z.centerLon,
         silverThreshold: z.silverThreshold,
@@ -944,6 +851,20 @@ async function main() {
   }
   console.log(`Зоны: ${ZONES.length}, места: ${placeCount}`);
 
+  // Устаревшие зоны (например, старое деление Минска на кварталы) — вон
+  const keepSlugs = new Set(ZONES.map((z) => z.slug));
+  const stale = await prisma.zone.findMany({
+    where: { slug: { notIn: [...keepSlugs] } },
+    select: { id: true, slug: true },
+  });
+  if (stale.length) {
+    const ids = stale.map((z) => z.id);
+    await prisma.userZoneProgress.deleteMany({ where: { zoneId: { in: ids } } });
+    await prisma.zoneGoldRequirement.deleteMany({ where: { zoneId: { in: ids } } });
+    await prisma.zone.deleteMany({ where: { id: { in: ids } } });
+    console.log(`Удалено устаревших зон: ${stale.length}`);
+  }
+
   // События (одно предстоящее, одно завершённое — для проверки AC15)
   const mir = await prisma.place.findUnique({ where: { slug: "mir-castle" } });
   const ratusha = await prisma.place.findUnique({ where: { slug: "minsk-ratusha" } });
@@ -1000,7 +921,9 @@ async function main() {
   }
   console.log("События: 2 (предстоящее + завершённое, демо)");
 
-  console.log("Seed завершён. Золото полностью достижимо в зонах: Минск, Мир, Несвиж, Пуща, Гродно, Браслав.");
+  console.log(
+    "Seed завершён. Зоны — 6 областей Беларуси + Минск; золото достижимо в каждой зоне.",
+  );
 }
 
 main()

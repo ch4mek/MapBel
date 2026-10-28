@@ -91,6 +91,12 @@ function zoneBounds(zone: MapZoneDTO): [[number, number], [number, number]] {
   ];
 }
 
+/** Площадь bbox в градусах — для порядка отрисовки зон (мелкие поверх крупных). */
+function bboxArea(geometry: unknown): number {
+  const [[x1, y1], [x2, y2]] = zoneBounds({ geometry } as MapZoneDTO);
+  return (x2 - x1) * (y2 - y1);
+}
+
 /** Подписи подложки на русском (с откатом на белорусский и исходное имя). */
 function localizeLabels(map: maplibregl.Map) {
   for (const layer of map.getStyle().layers ?? []) {
@@ -274,11 +280,14 @@ export default function MapView(props: MapViewProps) {
     if (!map || !ready) return;
     (map.getSource("zones") as GeoJSONSource | undefined)?.setData({
       type: "FeatureCollection",
-      features: props.zones.map((z) => ({
-        type: "Feature" as const,
-        geometry: z.geometry as GeoJSON.Polygon,
-        properties: { zoneId: z.id, status: z.status },
-      })),
+      // крупные зоны первыми — минькие (Минск поверх Минской области) рисуются позже и выше
+      features: [...props.zones]
+        .sort((a, b) => bboxArea(b.geometry) - bboxArea(a.geometry))
+        .map((z) => ({
+          type: "Feature" as const,
+          geometry: z.geometry as GeoJSON.Polygon,
+          properties: { zoneId: z.id, status: z.status },
+        })),
     });
 
     for (const { marker } of zoneMarkers.current.values()) marker.remove();
