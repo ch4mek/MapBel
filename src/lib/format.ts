@@ -39,8 +39,7 @@ export function formatDateTime(d: Date | string): string {
   });
 }
 
-/** Короткое имя зоны: "Минск — Верхний город" → "Верхний город". */
+/** Короткое имя зоны: "Минск — Верхний город" → "Минск". */
 export function shortZoneName(name: string): string {
-  const parts = name.split(" — ");
-  return parts.length > 1 ? parts.slice(1).join(" — ") : name;
+  return name.split(" — ")[0];
 }

@@ -11,7 +11,6 @@ export interface MapZoneDTO {
   id: string;
   slug: string;
   name: string;
-  district: string | null;
   description: string | null;
   geometry: unknown; // GeoJSON Polygon/MultiPolygon
   centerLat: number;
@@ -64,7 +63,6 @@ export async function getMapZones(userId: string | null): Promise<MapZoneDTO[]> 
       id: z.id,
       slug: z.slug,
       name: z.name,
-      district: z.district,
       description: z.description,
       geometry: z.geometry,
       centerLat: z.centerLat.toNumber(),
