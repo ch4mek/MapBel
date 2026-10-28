@@ -129,6 +129,7 @@ export default function MapView(props: MapViewProps) {
   const placeMarkers = useRef(new Map<string, MarkerEntry>());
   const userMarker = useRef<maplibregl.Marker | null>(null);
   const latest = useRef(props);
+  const styleEverLoaded = useRef(false);
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -140,6 +141,9 @@ export default function MapView(props: MapViewProps) {
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
     const container = containerRef.current;
+    // StrictMode перемонтирует компонент с сохранённым состоянием:
+    // готовность привязываем к текущему экземпляру карты заново
+    styleEverLoaded.current = false;
     const map = new maplibregl.Map({
       container,
       style: props.styleUrl,
@@ -159,6 +163,8 @@ export default function MapView(props: MapViewProps) {
     };
 
     map.on("load", () => {
+      styleEverLoaded.current = true;
+      setFailed(false);
       localizeLabels(map);
       map.addSource("zones", {
         type: "geojson",
@@ -225,8 +231,9 @@ export default function MapView(props: MapViewProps) {
     });
 
     map.on("error", () => {
-      // Не удалось загрузить стиль подложки — показываем понятное сообщение
-      if (!map.isStyleLoaded()) setFailed(true);
+      // Стиль не смог загрузиться (тайлы при этом могут доезжать с повторами) —
+      // показываем понятное сообщение только если load так и не наступил
+      if (!styleEverLoaded.current) setFailed(true);
     });
     map.on("zoom", syncZoomClass);
     map.on("click", "zone-fill", (e: MapLayerMouseEvent) => {
@@ -252,6 +259,9 @@ export default function MapView(props: MapViewProps) {
       zm.clear();
       pm.clear();
       userMarker.current = null;
+      // сбрасываем готовность: при повторном монтировании карта создаётся с нуля,
+      // и эффекты не должны трогать стиль до её load
+      setReady(false);
       map.remove();
       mapRef.current = null;
     };
@@ -337,7 +347,9 @@ export default function MapView(props: MapViewProps) {
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !ready) return;
-    map.setFilter("zone-selected", ["==", ["get", "zoneId"], props.selectedZoneId ?? ""]);
+    if (map.getLayer("zone-selected")) {
+      map.setFilter("zone-selected", ["==", ["get", "zoneId"], props.selectedZoneId ?? ""]);
+    }
     for (const [id, { el }] of zoneMarkers.current) {
       el.classList.toggle("is-selected", id === props.selectedZoneId);
     }

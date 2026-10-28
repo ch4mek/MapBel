@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { connection } from "next/server";
 import {
   Accessibility,
   ArrowLeft,
@@ -70,6 +71,7 @@ function InfoRow({
 
 export default async function PlacePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
+  await connection();
   const session = await auth();
   const userId = session?.user?.id ?? null;
   const place = await getPlaceCard(slug, userId);

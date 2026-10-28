@@ -1,3 +1,4 @@
+import { connection } from "next/server";
 import { auth } from "@/auth";
 import { getMapPlaces, getMapZones } from "@/lib/catalog";
 import { MapExplorer } from "@/components/map-explorer";
@@ -7,6 +8,7 @@ export default async function HomePage({
 }: {
   searchParams: Promise<{ zone?: string }>;
 }) {
+  await connection();
   const [session, sp] = await Promise.all([auth(), searchParams]);
   const userId = session?.user?.id ?? null;
   const [zones, places] = await Promise.all([getMapZones(userId), getMapPlaces(userId)]);
