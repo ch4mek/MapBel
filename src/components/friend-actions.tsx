@@ -1,7 +1,8 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Check, UserMinus, X } from "lucide-react";
 
 export function FriendActions({
   kind,
@@ -12,6 +13,7 @@ export function FriendActions({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const [confirm, setConfirm] = useState(false);
 
   function run(accept: boolean) {
     startTransition(async () => {
@@ -23,21 +25,32 @@ export function FriendActions({
   if (kind === "respond") {
     return (
       <span className="flex gap-1.5">
-        <button
-          type="button"
-          className="btn btn-primary !min-h-0 !px-2 !py-1 text-xs"
-          disabled={pending}
-          onClick={() => run(true)}
-        >
-          ✔ Принять
+        <button type="button" className="btn btn-primary btn-sm" disabled={pending} onClick={() => run(true)}>
+          <Check className="size-3.5" />
+          Принять
         </button>
         <button
           type="button"
-          className="btn btn-ghost !min-h-0 !px-2 !py-1 text-xs"
+          className="btn btn-secondary btn-sm btn-icon w-9"
           disabled={pending}
           onClick={() => run(false)}
+          aria-label="Отклонить"
+          title="Отклонить"
         >
-          ✖ Отклонить
+          <X className="size-4" />
+        </button>
+      </span>
+    );
+  }
+
+  if (confirm) {
+    return (
+      <span className="flex gap-1.5">
+        <button type="button" className="btn btn-danger btn-sm" disabled={pending} onClick={() => run(false)}>
+          Удалить
+        </button>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={() => setConfirm(false)}>
+          Отмена
         </button>
       </span>
     );
@@ -45,11 +58,12 @@ export function FriendActions({
   return (
     <button
       type="button"
-      className="btn btn-ghost !min-h-0 !px-2 !py-1 text-xs"
-      disabled={pending}
-      onClick={() => run(false)}
+      className="btn btn-subtle btn-sm btn-icon w-9"
+      onClick={() => setConfirm(true)}
+      aria-label="Удалить из друзей"
+      title="Удалить из друзей"
     >
-      Удалить из друзей
+      <UserMinus className="size-4" />
     </button>
   );
 }

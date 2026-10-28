@@ -2,11 +2,13 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Check, CircleAlert, Eye, EyeOff, X } from "lucide-react";
 import {
   resolveSuggestionAction,
   moderateReviewAction,
   setPlacePublicationAction,
 } from "@/lib/actions/editor";
+import { Alert } from "@/components/ui/primitives";
 
 export function SuggestionActions({ suggestionId }: { suggestionId: string }) {
   const router = useRouter();
@@ -17,40 +19,47 @@ export function SuggestionActions({ suggestionId }: { suggestionId: string }) {
   function resolve(decision: "APPROVED" | "REJECTED") {
     setError(null);
     startTransition(async () => {
-      const res = await resolveSuggestionAction(suggestionId, decision, comment);
+      const res = await resolveSuggestionAction(suggestionId, decision, comment || undefined);
       if (res.error) setError(res.error);
       else router.refresh();
     });
   }
 
   return (
-    <div className="mt-2 flex flex-wrap items-center gap-2">
-      <input
-        className="input !max-w-64 !min-h-0 !py-1.5 text-xs"
-        placeholder="Комментарий редактора"
-        value={comment}
-        onChange={(e) => setComment(e.target.value)}
-      />
-      <button
-        type="button"
-        className="btn btn-primary !min-h-0 !px-2 !py-1 text-xs"
-        disabled={pending}
-        onClick={() => resolve("APPROVED")}
-      >
-        Одобрить
-      </button>
-      <button
-        type="button"
-        className="btn btn-ghost !min-h-0 !px-2 !py-1 text-xs"
-        disabled={pending}
-        onClick={() => resolve("REJECTED")}
-      >
-        Отклонить
-      </button>
+    <div className="mt-4 border-t border-zinc-100 pt-4">
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <input
+          className="input h-10"
+          placeholder="Комментарий для автора (необязательно)"
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+          aria-label="Комментарий редактора"
+        />
+        <div className="flex shrink-0 gap-2">
+          <button
+            type="button"
+            className="btn btn-primary h-10 flex-1 sm:flex-none"
+            disabled={pending}
+            onClick={() => resolve("APPROVED")}
+          >
+            <Check className="size-4" />
+            Одобрить
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary h-10 flex-1 sm:flex-none"
+            disabled={pending}
+            onClick={() => resolve("REJECTED")}
+          >
+            <X className="size-4" />
+            Отклонить
+          </button>
+        </div>
+      </div>
       {error && (
-        <span className="text-xs text-[var(--danger)]" role="alert">
+        <Alert tone="danger" icon={CircleAlert} className="mt-3">
           {error}
-        </span>
+        </Alert>
       )}
     </div>
   );
@@ -62,7 +71,7 @@ export function ReviewModerate({ reviewId, hidden }: { reviewId: string; hidden:
   return (
     <button
       type="button"
-      className="btn btn-ghost !min-h-0 !px-2 !py-1 text-xs"
+      className={hidden ? "btn btn-secondary btn-sm" : "btn btn-danger-soft btn-sm"}
       disabled={pending}
       onClick={() =>
         startTransition(async () => {
@@ -71,34 +80,30 @@ export function ReviewModerate({ reviewId, hidden }: { reviewId: string; hidden:
         })
       }
     >
+      {hidden ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
       {hidden ? "Вернуть" : "Скрыть"}
     </button>
   );
 }
 
-export function PlaceVisibility({
-  placeId,
-  status,
-}: {
-  placeId: string;
-  status: string;
-}) {
+export function PlaceVisibility({ placeId, status }: { placeId: string; status: string }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const next = status === "PUBLISHED" ? "HIDDEN" : "PUBLISHED";
+  const publish = status !== "PUBLISHED";
   return (
     <button
       type="button"
-      className="btn btn-ghost !min-h-0 !px-2 !py-1 text-xs"
+      className={publish ? "btn btn-primary btn-sm" : "btn btn-secondary btn-sm"}
       disabled={pending}
       onClick={() =>
         startTransition(async () => {
-          await setPlacePublicationAction(placeId, next);
+          await setPlacePublicationAction(placeId, publish ? "PUBLISHED" : "HIDDEN");
           router.refresh();
         })
       }
     >
-      {status === "PUBLISHED" ? "Скрыть" : status === "HIDDEN" ? "Опубликовать" : "В черновики → опубликовать"}
+      {publish ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
+      {publish ? "Опубликовать" : "Скрыть"}
     </button>
   );
 }

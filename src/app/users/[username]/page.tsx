@@ -22,7 +22,7 @@ export default async function PublicProfilePage({
 
   const data = await getProfileData(target.id, viewerId);
   if (!data) notFound();
-  return <ProfileView data={data} />;
+  return <ProfileView data={data} isSelf={viewerId === target.id} />;
 }
 
 // Страница зависит от сессии/БД: рендерим блокирующе на сервере

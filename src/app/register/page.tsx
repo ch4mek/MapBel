@@ -2,74 +2,101 @@
 
 import Link from "next/link";
 import { useActionState } from "react";
+import { CircleAlert, UserPlus } from "lucide-react";
 import { registerAction, type FormState } from "@/lib/actions/auth";
+import { AuthShell } from "@/components/auth-shell";
+import { Alert } from "@/components/ui/primitives";
 
 export default function RegisterPage() {
-  const [state, formAction, pending] = useActionState<FormState, FormData>(
-    registerAction,
-    {},
-  );
+  const [state, formAction, pending] = useActionState<FormState, FormData>(registerAction, {});
   return (
-    <div className="mx-auto mt-8 w-full max-w-sm">
-      <h1 className="text-2xl font-bold">Регистрация</h1>
-      <p className="mt-1 text-sm text-[var(--muted)]">
-        Прогресс начинается после регистрации и сохраняется навсегда.
-      </p>
-      <form action={formAction} className="card mt-4 flex flex-col gap-3 p-4">
-        <div>
-          <label className="label" htmlFor="displayName">
-            Отображаемое имя
-          </label>
-          <input id="displayName" name="displayName" className="input" required minLength={2} maxLength={40} />
+    <AuthShell
+      title="Создать аккаунт"
+      subtitle="Прогресс начинается после регистрации и сохраняется навсегда."
+    >
+      <form action={formAction} className="flex flex-col gap-4">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className="label" htmlFor="displayName">
+              Имя
+            </label>
+            <input
+              id="displayName"
+              name="displayName"
+              className="input h-12"
+              required
+              minLength={2}
+              maxLength={40}
+              autoComplete="name"
+              placeholder="Анна"
+            />
+          </div>
+          <div>
+            <label className="label" htmlFor="username">
+              Имя пользователя
+            </label>
+            <input
+              id="username"
+              name="username"
+              className="input h-12"
+              required
+              pattern="[a-zA-Z0-9_\-]{3,24}"
+              autoComplete="username"
+              placeholder="anna_travels"
+            />
+          </div>
         </div>
-        <div>
-          <label className="label" htmlFor="username">
-            Имя пользователя (для поиска и отметок)
-          </label>
-          <input
-            id="username"
-            name="username"
-            className="input"
-            required
-            pattern="[a-zA-Z0-9_-]{3,24}"
-            placeholder="traveler_minsk"
-          />
-        </div>
+        <p className="hint -mt-2">Имя пользователя видят друзья — по нему вас найдут и отметят на фото.</p>
         <div>
           <label className="label" htmlFor="email">
             Email
           </label>
-          <input id="email" name="email" type="email" className="input" required autoComplete="email" />
+          <input
+            id="email"
+            name="email"
+            type="email"
+            className="input h-12"
+            required
+            autoComplete="email"
+            placeholder="you@example.com"
+          />
+          <p className="hint">Email никому не показывается.</p>
         </div>
         <div>
           <label className="label" htmlFor="password">
-            Пароль (минимум 8 символов)
+            Пароль
           </label>
           <input
             id="password"
             name="password"
             type="password"
-            className="input"
+            className="input h-12"
             required
             minLength={8}
             autoComplete="new-password"
           />
+          <p className="hint">Не меньше 8 символов.</p>
         </div>
         {state.error && (
-          <p className="text-sm text-[var(--danger)]" role="alert">
+          <Alert tone="danger" icon={CircleAlert}>
             {state.error}
-          </p>
+          </Alert>
         )}
-        <button className="btn btn-primary" type="submit" disabled={pending}>
-          {pending ? "Создаём аккаунт…" : "Создать аккаунт"}
+        <button className="btn btn-primary btn-lg mt-2" type="submit" disabled={pending}>
+          {pending ? (
+            <span className="size-5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+          ) : (
+            <UserPlus className="size-5" />
+          )}
+          {pending ? "Создаём аккаунт…" : "Начать путешествие"}
         </button>
-        <p className="text-sm text-[var(--muted)]">
-          Уже есть аккаунт?{" "}
-          <Link href="/login" className="text-[var(--brand)] underline">
-            Войти
-          </Link>
-        </p>
       </form>
-    </div>
+      <p className="mt-6 text-center text-sm text-zinc-500">
+        Уже есть аккаунт?{" "}
+        <Link href="/login" className="font-semibold text-forest-700 hover:underline">
+          Войти
+        </Link>
+      </p>
+    </AuthShell>
   );
 }

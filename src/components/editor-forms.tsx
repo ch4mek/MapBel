@@ -1,6 +1,8 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { CircleAlert, CircleCheck } from "lucide-react";
+import { Alert } from "@/components/ui/primitives";
 import {
   upsertPlaceAction,
   upsertZoneAction,
@@ -21,15 +23,15 @@ const CATEGORIES = [
 function StateMsg({ state }: { state: ActionResult }) {
   if (state.error)
     return (
-      <p className="text-sm text-[var(--danger)]" role="alert">
+      <Alert tone="danger" icon={CircleAlert}>
         {state.error}
-      </p>
+      </Alert>
     );
   if (state.ok)
     return (
-      <p className="text-sm text-emerald-700" role="status">
+      <Alert tone="success" icon={CircleCheck}>
         Сохранено.
-      </p>
+      </Alert>
     );
   return null;
 }

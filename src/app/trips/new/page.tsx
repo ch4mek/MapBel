@@ -1,8 +1,13 @@
+import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
+import { ArrowLeft, Route } from "lucide-react";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { TripCreateForm } from "@/components/trip-create-form";
+import { Container, PageHeader } from "@/components/ui/primitives";
 
+export const metadata: Metadata = { title: "Новая поездка" };
 
 export default async function NewTripPage({
   searchParams,
@@ -15,28 +20,33 @@ export default async function NewTripPage({
 
   const places = await prisma.place.findMany({
     where: { publicationStatus: "PUBLISHED" },
-    select: { id: true, name: true, zone: { select: { name: true } } },
+    select: { id: true, name: true, category: true, zone: { select: { name: true } } },
     orderBy: [{ zone: { name: "asc" } }, { name: "asc" }],
   });
 
   return (
-    <div className="mx-auto w-full max-w-xl">
-      <h1 className="text-2xl font-bold">Новая поездка</h1>
-      <p className="mt-1 text-sm text-[var(--muted)]">
-        После старта состав обязательных мест фиксируется, и участники
-        подтверждают визиты самостоятельно.
-      </p>
-      <div className="mt-4">
+    <Container size="md">
+      <Link href="/trips" className="btn btn-subtle btn-sm -ml-3 mb-3">
+        <ArrowLeft className="size-4" />
+        Поездки
+      </Link>
+      <PageHeader
+        title="Новая поездка"
+        subtitle="Друзей пригласите после создания. После старта маршрут фиксируется."
+        icon={Route}
+      />
+      <div className="card p-5 sm:p-7">
         <TripCreateForm
           preselectedPlaceId={sp.place}
           places={places.map((p) => ({
             id: p.id,
             name: p.name,
+            category: p.category,
             zoneName: p.zone.name,
           }))}
         />
       </div>
-    </div>
+    </Container>
   );
 }
 

@@ -1,13 +1,15 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { CircleAlert, CircleCheck, EyeOff, Globe, Users, type LucideIcon } from "lucide-react";
 import {
   createDiaryEntryAction,
   updateDiaryEntryAction,
   type ActionResult,
 } from "@/lib/actions/diary";
+import { Alert } from "@/components/ui/primitives";
+import { cn } from "@/lib/cn";
 
 export interface EntryEditorProps {
   mode: "create" | "edit";
@@ -22,134 +24,168 @@ export interface EntryEditorProps {
     visibility: string;
   };
   preselectedPlaceId?: string;
+  preselectedTripId?: string;
 }
 
-const VISIBILITY_OPTIONS = [
-  { value: "PRIVATE", label: "Только мне" },
-  { value: "FRIENDS", label: "Друзьям (по умолчанию)" },
-  { value: "PUBLIC", label: "Всем" },
+const VISIBILITY: { value: string; label: string; hint: string; icon: LucideIcon }[] = [
+  { value: "PRIVATE", label: "Только мне", hint: "Никто, кроме вас", icon: EyeOff },
+  { value: "FRIENDS", label: "Друзьям", hint: "По умолчанию", icon: Users },
+  { value: "PUBLIC", label: "Всем", hint: "Любой посетитель", icon: Globe },
 ];
 
 export function EntryEditor(props: EntryEditorProps) {
   const router = useRouter();
   const action = props.mode === "create" ? createDiaryEntryAction : updateDiaryEntryAction;
-  const [state, formAction, pending] = useActionState<ActionResult, FormData>(
-    action,
-    {},
-  );
+  const [state, formAction, pending] = useActionState<ActionResult, FormData>(action, {});
 
   useEffect(() => {
-    if (state.ok && state.id) {
-      router.push(`/diary/${state.id}`);
-    }
-  }, [state, router]);
+    if (state.ok && state.id && props.mode === "create") router.push(`/diary/${state.id}`);
+    if (state.ok && props.mode === "edit") router.refresh();
+  }, [state, router, props.mode]);
+
+  // Группировка мест по зонам для удобного выбора
+  const byZone = new Map<string, { id: string; name: string }[]>();
+  for (const p of props.places) {
+    const list = byZone.get(p.zoneName) ?? [];
+    list.push({ id: p.id, name: p.name });
+    byZone.set(p.zoneName, list);
+  }
+
+  const currentVisibility = props.entry?.visibility ?? "FRIENDS";
 
   return (
-    <form action={formAction} className="card flex flex-col gap-3 p-4">
+    <form action={formAction} className="flex flex-col gap-5">
       {props.mode === "edit" && <input type="hidden" name="id" value={props.entry?.id} />}
       <div>
         <label className="label" htmlFor="title">
-          Заголовок *
+          Заголовок
         </label>
         <input
           id="title"
           name="title"
-          className="input"
+          className="input h-12 text-base"
           required
           maxLength={120}
           defaultValue={props.entry?.title ?? ""}
-          placeholder="Первый раз в Мирском замке"
+          placeholder="Например: Рассвет у Мирского замка"
         />
       </div>
-      <div>
-        <label className="label" htmlFor="placeId">
-          Место *
-        </label>
-        <select
-          id="placeId"
-          name="placeId"
-          className="input"
-          required
-          defaultValue={props.entry?.placeId ?? props.preselectedPlaceId ?? ""}
-        >
-          <option value="" disabled>
-            Выберите место
-          </option>
-          {props.places.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name} — {p.zoneName}
+
+      <div className="grid gap-5 sm:grid-cols-2">
+        <div>
+          <label className="label" htmlFor="placeId">
+            Место
+          </label>
+          <select
+            id="placeId"
+            name="placeId"
+            className="input"
+            required
+            defaultValue={props.entry?.placeId ?? props.preselectedPlaceId ?? ""}
+          >
+            <option value="" disabled>
+              Выберите место
             </option>
-          ))}
-        </select>
+            {[...byZone.entries()].map(([zone, list]) => (
+              <optgroup key={zone} label={zone}>
+                {list.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="label" htmlFor="tripDate">
+            Дата поездки
+          </label>
+          <input
+            id="tripDate"
+            name="tripDate"
+            type="date"
+            className="input"
+            defaultValue={props.entry?.tripDate ?? ""}
+          />
+          <p className="hint">Можно указать прошлую — зоны задним числом не открываются.</p>
+        </div>
       </div>
-      <div>
-        <label className="label" htmlFor="tripDate">
-          Дата поездки (можно прошлую — задним числом зоны не открываются)
-        </label>
-        <input
-          id="tripDate"
-          name="tripDate"
-          type="date"
-          className="input"
-          defaultValue={props.entry?.tripDate ?? ""}
-        />
-      </div>
-      {props.mode === "create" && (
+
+      {props.mode === "create" && props.trips.length > 0 && (
         <div>
           <label className="label" htmlFor="tripId">
-            Совместная поездка (необязательно)
+            Совместная поездка
           </label>
-          <select id="tripId" name="tripId" className="input" defaultValue="">
-            <option value="">— нет —</option>
+          <select id="tripId" name="tripId" className="input" defaultValue={props.preselectedTripId ?? ""}>
+            <option value="">Без поездки</option>
             {props.trips.map((t) => (
               <option key={t.id} value={t.id}>
                 {t.title}
               </option>
             ))}
           </select>
+          <p className="hint">Запись появится в карточке поездки для её участников.</p>
         </div>
       )}
+
       <div>
         <label className="label" htmlFor="description">
-          Описание
+          Рассказ
         </label>
         <textarea
           id="description"
           name="description"
-          className="input min-h-28"
+          className="input min-h-36"
           maxLength={10000}
           defaultValue={props.entry?.description ?? ""}
-          placeholder="Как всё прошло?"
+          placeholder="Как прошёл день? Что запомнилось больше всего?"
         />
       </div>
-      <div>
-        <label className="label" htmlFor="visibility">
-          Кто видит запись
-        </label>
-        <select
-          id="visibility"
-          name="visibility"
-          className="input"
-          defaultValue={props.entry?.visibility ?? "FRIENDS"}
-        >
-          {VISIBILITY_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
+
+      <fieldset>
+        <legend className="label">Кто видит запись</legend>
+        <div className="grid grid-cols-3 gap-2">
+          {VISIBILITY.map((v) => (
+            <label key={v.value} className="cursor-pointer">
+              <input
+                type="radio"
+                name="visibility"
+                value={v.value}
+                defaultChecked={currentVisibility === v.value}
+                className="peer sr-only"
+              />
+              <span
+                className={cn(
+                  "flex h-full flex-col items-center gap-1 rounded-2xl border-2 border-zinc-200 bg-white p-3 text-center transition",
+                  "peer-checked:border-forest-600 peer-checked:bg-forest-50 peer-focus-visible:ring-4 peer-focus-visible:ring-forest-500/25 hover:border-zinc-300",
+                )}
+              >
+                <v.icon className="size-5 text-forest-700" aria-hidden />
+                <span className="text-sm font-semibold text-zinc-900">{v.label}</span>
+                <span className="text-[11px] leading-tight text-zinc-500">{v.hint}</span>
+              </span>
+            </label>
           ))}
-        </select>
-      </div>
+        </div>
+      </fieldset>
+
       {state.error && (
-        <p className="text-sm text-[var(--danger)]" role="alert">
+        <Alert tone="danger" icon={CircleAlert}>
           {state.error}
-        </p>
+        </Alert>
       )}
-      <button className="btn btn-primary w-fit" type="submit" disabled={pending}>
+      {state.ok && props.mode === "edit" && (
+        <Alert tone="success" icon={CircleCheck}>
+          Изменения сохранены
+        </Alert>
+      )}
+      <button className="btn btn-primary btn-lg self-start" type="submit" disabled={pending}>
         {pending
           ? "Сохраняем…"
           : props.mode === "create"
-            ? "Создать запись → добавить фото"
-            : "Сохранить"}
+            ? "Создать и добавить фото"
+            : "Сохранить изменения"}
       </button>
     </form>
   );

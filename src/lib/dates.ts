@@ -16,6 +16,11 @@ export function minskDayKey(t: Date | number): string {
   return toMinskWallClock(t).toISOString().slice(0, 10);
 }
 
+/** Ключ сегодняшнего дня в Minsk. */
+export function minskTodayKey(): string {
+  return minskDayKey(Date.now());
+}
+
 /** Ключ календарного месяца в Minsk: "YYYY-MM". */
 export function minskMonthKey(t: Date | number): string {
   return toMinskWallClock(t).toISOString().slice(0, 7);

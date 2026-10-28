@@ -1,46 +1,54 @@
+import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
+import { ArrowLeft, PenLine } from "lucide-react";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { EntryEditor } from "@/components/entry-editor";
 import { listMyTripsForEntry } from "@/lib/actions/diary";
+import { Container, PageHeader } from "@/components/ui/primitives";
 
+export const metadata: Metadata = { title: "Новая запись" };
 
 export default async function NewDiaryEntryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ place?: string }>;
+  searchParams: Promise<{ place?: string; trip?: string }>;
 }) {
   const session = await auth();
   if (!session?.user) redirect("/login");
   const sp = await searchParams;
 
-  const places = await prisma.place.findMany({
-    where: { publicationStatus: "PUBLISHED" },
-    select: { id: true, name: true, zone: { select: { name: true } } },
-    orderBy: { name: "asc" },
-  });
-  const trips = await listMyTripsForEntry();
+  const [places, trips] = await Promise.all([
+    prisma.place.findMany({
+      where: { publicationStatus: "PUBLISHED" },
+      select: { id: true, name: true, zone: { select: { name: true } } },
+      orderBy: [{ zone: { name: "asc" } }, { name: "asc" }],
+    }),
+    listMyTripsForEntry(),
+  ]);
 
   return (
-    <div className="mx-auto w-full max-w-xl">
-      <h1 className="text-2xl font-bold">Новая запись</h1>
-      <p className="mt-1 text-sm text-[var(--muted)]">
-        Запись относится к одному месту и может быть привязана к поездке.
-        Фотографии добавите на следующем шаге.
-      </p>
-      <div className="mt-4">
+    <Container size="md">
+      <Link href="/diary" className="btn btn-subtle btn-sm -ml-3 mb-3">
+        <ArrowLeft className="size-4" />
+        Дневник
+      </Link>
+      <PageHeader
+        title="Новая запись"
+        subtitle="Одна запись — одно место. Фотографии добавите на следующем шаге."
+        icon={PenLine}
+      />
+      <div className="card p-5 sm:p-7">
         <EntryEditor
           mode="create"
           preselectedPlaceId={sp.place}
-          places={places.map((p) => ({
-            id: p.id,
-            name: p.name,
-            zoneName: p.zone.name,
-          }))}
+          preselectedTripId={sp.trip}
+          places={places.map((p) => ({ id: p.id, name: p.name, zoneName: p.zone.name }))}
           trips={trips.map((t) => ({ id: t.id, title: t.title }))}
         />
       </div>
-    </div>
+    </Container>
   );
 }
 

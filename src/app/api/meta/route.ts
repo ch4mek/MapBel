@@ -12,6 +12,6 @@ export function GET() {
   return NextResponse.json({
     demoGeoEnabled,
     mapStyleUrl:
-      process.env.MAP_STYLE_URL ?? "https://tiles.openfreemap.org/styles/liberty",
+      process.env.MAP_STYLE_URL ?? "https://tiles.openfreemap.org/styles/positron",
   });
 }

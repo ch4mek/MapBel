@@ -1,19 +1,22 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+import { connection } from "next/server";
+import { Ban, CalendarDays, Clock, ExternalLink, Filter, History, MapPin, User, X } from "lucide-react";
 import { prisma } from "@/lib/prisma";
+import { Container, EmptyState, PageHeader, Pill } from "@/components/ui/primitives";
+import { shortZoneName } from "@/lib/format";
+import { cn } from "@/lib/cn";
 
+export const metadata: Metadata = { title: "События" };
 
-export default async function EventsPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ zone?: string; from?: string; to?: string }>;
-}) {
-  const sp = await searchParams;
+type EventRow = Awaited<ReturnType<typeof loadEvents>>[number];
 
-  const events = await prisma.event.findMany({
+function loadEvents(sp: { zone?: string; from?: string; to?: string }) {
+  return prisma.event.findMany({
     where: {
-      ...(sp.zone || sp.from || sp.to
+      ...(sp.zone ? { place: { zoneId: sp.zone } } : {}),
+      ...(sp.from || sp.to
         ? {
-            place: sp.zone ? { zoneId: sp.zone } : undefined,
             startsAt: {
               ...(sp.from ? { gte: new Date(sp.from) } : {}),
               ...(sp.to ? { lte: new Date(sp.to + "T23:59:59") } : {}),
@@ -21,96 +24,130 @@ export default async function EventsPage({
           }
         : {}),
     },
-    include: {
-      place: {
-        select: { name: true, slug: true, zone: { select: { name: true } } },
-      },
-    },
+    include: { place: { select: { name: true, slug: true, zone: { select: { name: true } } } } },
     orderBy: { startsAt: "asc" },
   });
+}
 
-  const now = new Date();
-  const upcoming = events.filter(
-    (e) => e.status === "SCHEDULED" && e.endsAt >= now,
-  );
-  const cancelled = events.filter((e) => e.status === "CANCELLED" && e.endsAt >= now);
-  const past = events
-    .filter((e) => e.status === "COMPLETED" || e.endsAt < now)
-    .reverse()
-    .slice(0, 12);
+function EventCard({ e, kind }: { e: EventRow; kind: "upcoming" | "cancelled" | "past" }) {
+  const tz = e.timezone || "Europe/Minsk";
+  const day = e.startsAt.toLocaleDateString("ru-RU", { day: "numeric", timeZone: tz });
+  const month = e.startsAt.toLocaleDateString("ru-RU", { month: "short", timeZone: tz }).replace(".", "");
+  const time = (d: Date) => d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit", timeZone: tz });
+  const sameDay =
+    e.startsAt.toLocaleDateString("ru-RU", { timeZone: tz }) === e.endsAt.toLocaleDateString("ru-RU", { timeZone: tz });
 
-  const zones = await prisma.zone.findMany({
-    select: { id: true, name: true },
-    orderBy: { name: "asc" },
-  });
-
-  function EventCard({ e, pastView = false }: { e: (typeof events)[number]; pastView?: boolean }) {
-    return (
-      <li className="card p-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <h3 className="font-semibold">{e.title}</h3>
-          {e.status === "CANCELLED" && (
-            <span className="chip !border-red-400 !text-red-600">ОТМЕНЕНО</span>
+  return (
+    <li className={cn("card flex gap-4 p-4 sm:p-5", kind !== "upcoming" && "opacity-75")}>
+      <div
+        className={cn(
+          "flex w-16 shrink-0 flex-col items-center justify-center rounded-2xl py-2.5 sm:w-[4.5rem]",
+          kind === "upcoming" && "bg-forest-700 text-white",
+          kind === "cancelled" && "bg-red-50 text-red-700",
+          kind === "past" && "bg-zinc-100 text-zinc-500",
+        )}
+      >
+        <span className="font-display text-2xl leading-none font-bold">{day}</span>
+        <span className="mt-1 text-xs font-semibold uppercase">{month}</span>
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-1.5">
+          {kind === "cancelled" && (
+            <Pill tone="danger" icon={Ban} className="py-0.5 text-[11px]">
+              Отменено
+            </Pill>
           )}
-          {e.status === "COMPLETED" && (
-            <span className="chip !border-amber-500 !text-amber-700">завершено</span>
+          {kind === "past" && (
+            <Pill tone="neutral" icon={History} className="py-0.5 text-[11px]">
+              {e.status === "COMPLETED" ? "Завершено" : "Прошло"}
+            </Pill>
           )}
           {e.isDemo && (
-            <span className="chip !border-amber-400 !text-amber-700">демо</span>
+            <Pill tone="demo" className="py-0.5 text-[11px]">
+              Демо
+            </Pill>
           )}
         </div>
-        <p className="mt-1 text-sm text-[var(--muted)]">
-          {e.startsAt.toLocaleString("ru-RU", {
-            timeZone: e.timezone,
-            dateStyle: "medium",
-            timeStyle: "short",
-          })}
-          {" – "}
-          {e.endsAt.toLocaleString("ru-RU", {
-            timeZone: e.timezone,
-            timeStyle: "short",
-          })}
-          {pastView ? " (прошло)" : ""}
-        </p>
-        {e.description && <p className="mt-1 text-sm">{e.description}</p>}
-        <p className="mt-1 text-sm">
-          {e.place ? (
-            <>
-              Место:{" "}
-              <Link href={`/places/${e.place.slug}`} className="underline">
-                {e.place.name}
-              </Link>{" "}
-              ({e.place.zone.name})
-            </>
-          ) : (
-            e.organizer && `Организатор: ${e.organizer}`
+        <h3
+          className={cn(
+            "mt-1.5 font-display text-base leading-snug font-semibold text-zinc-900",
+            kind === "cancelled" && "line-through decoration-red-300",
           )}
-        </p>
-        {e.officialUrl && (
+        >
+          {e.title}
+        </h3>
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-zinc-500">
+          <span className="flex items-center gap-1.5">
+            <Clock className="size-4" />
+            {sameDay
+              ? `${time(e.startsAt)} – ${time(e.endsAt)}`
+              : `${time(e.startsAt)} · до ${e.endsAt.toLocaleDateString("ru-RU", { day: "numeric", month: "short", timeZone: tz })}`}
+          </span>
+          {e.place && (
+            <Link href={`/places/${e.place.slug}`} className="flex items-center gap-1.5 hover:text-zinc-800">
+              <MapPin className="size-4" />
+              {e.place.name}
+              <span className="text-zinc-400">· {shortZoneName(e.place.zone.name)}</span>
+            </Link>
+          )}
+          {e.organizer && (
+            <span className="flex items-center gap-1.5">
+              <User className="size-4" />
+              {e.organizer}
+            </span>
+          )}
+        </div>
+        {e.description && <p className="mt-2.5 line-clamp-3 text-sm leading-relaxed text-zinc-600">{e.description}</p>}
+        {e.officialUrl && kind === "upcoming" && (
           <a
-            className="mt-1 inline-block text-sm text-[var(--brand)] underline"
+            className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-forest-700 hover:underline"
             href={e.officialUrl}
             target="_blank"
             rel="noreferrer"
           >
             Официальная страница
+            <ExternalLink className="size-3.5" />
           </a>
         )}
-      </li>
-    );
-  }
+      </div>
+    </li>
+  );
+}
+
+export default async function EventsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ zone?: string; from?: string; to?: string }>;
+}) {
+  await connection();
+  const sp = await searchParams;
+  const filtered = Boolean(sp.zone || sp.from || sp.to);
+
+  const [events, zones] = await Promise.all([
+    loadEvents(sp),
+    prisma.zone.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
+  ]);
+
+  const now = new Date();
+  // Завершённые и прошедшие никогда не попадают в «предстоящие»
+  const upcoming = events.filter((e) => e.status === "SCHEDULED" && e.endsAt >= now);
+  const cancelled = events.filter((e) => e.status === "CANCELLED" && e.endsAt >= now);
+  const past = events
+    .filter((e) => e.status === "COMPLETED" || (e.status !== "CANCELLED" && e.endsAt < now))
+    .reverse()
+    .slice(0, 12);
 
   return (
-    <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-bold">События</h1>
+    <Container size="md">
+      <PageHeader title="События" subtitle="Фестивали, экскурсии и праздники рядом с местами карты" icon={CalendarDays} />
 
-      <form className="card flex flex-wrap items-end gap-2 p-3" action="/events">
-        <div>
+      <form action="/events" className="card mb-8 flex flex-wrap items-end gap-3 p-4">
+        <div className="min-w-48 flex-1">
           <label className="label" htmlFor="zone">
             Территория
           </label>
           <select id="zone" name="zone" className="input" defaultValue={sp.zone ?? ""}>
-            <option value="">Все зоны</option>
+            <option value="">Вся Беларусь</option>
             {zones.map((z) => (
               <option key={z.id} value={z.id}>
                 {z.name}
@@ -118,64 +155,78 @@ export default async function EventsPage({
             ))}
           </select>
         </div>
-        <div>
+        <div className="w-[calc(50%-0.375rem)] sm:w-40">
           <label className="label" htmlFor="from">
             С даты
           </label>
           <input id="from" name="from" type="date" className="input" defaultValue={sp.from ?? ""} />
         </div>
-        <div>
+        <div className="w-[calc(50%-0.375rem)] sm:w-40">
           <label className="label" htmlFor="to">
             По дату
           </label>
           <input id="to" name="to" type="date" className="input" defaultValue={sp.to ?? ""} />
         </div>
-        <button className="btn btn-ghost" type="submit">
-          Фильтровать
-        </button>
-        <Link href="/events" className="btn btn-ghost">
-          Сбросить
-        </Link>
+        <div className="flex gap-2">
+          <button className="btn btn-secondary" type="submit">
+            <Filter className="size-4" />
+            Показать
+          </button>
+          {filtered && (
+            <Link href="/events" className="btn btn-subtle" aria-label="Сбросить фильтры">
+              <X className="size-4" />
+            </Link>
+          )}
+        </div>
       </form>
 
-      <section>
-        <h2 className="mb-2 text-lg font-semibold">Предстоящие ({upcoming.length})</h2>
-        <ul className="flex flex-col gap-3">
-          {upcoming.map((e) => (
-            <EventCard key={e.id} e={e} />
-          ))}
-          {upcoming.length === 0 && (
-            <li className="card p-4 text-sm text-[var(--muted)]">
-              Предстоящих событий нет.
-            </li>
-          )}
-        </ul>
+      <section aria-labelledby="upcoming-h">
+        <h2 id="upcoming-h" className="mb-3 font-display text-lg font-semibold">
+          Предстоящие <span className="text-zinc-400">· {upcoming.length}</span>
+        </h2>
+        {upcoming.length === 0 ? (
+          <EmptyState
+            icon={CalendarDays}
+            title={filtered ? "Нет событий по фильтру" : "Предстоящих событий нет"}
+            text={filtered ? "Попробуйте другой период или территорию." : "Загляните позже — редакторы добавляют новые события."}
+          />
+        ) : (
+          <ul className="flex flex-col gap-3">
+            {upcoming.map((e) => (
+              <EventCard key={e.id} e={e} kind="upcoming" />
+            ))}
+          </ul>
+        )}
       </section>
 
       {cancelled.length > 0 && (
-        <section>
-          <h2 className="mb-2 text-lg font-semibold">Отменённые</h2>
-          <ul className="flex flex-col gap-3 opacity-75">
+        <section className="mt-10" aria-labelledby="cancelled-h">
+          <h2 id="cancelled-h" className="mb-3 font-display text-lg font-semibold text-zinc-500">
+            Отменённые
+          </h2>
+          <ul className="flex flex-col gap-3">
             {cancelled.map((e) => (
-              <EventCard key={e.id} e={e} />
+              <EventCard key={e.id} e={e} kind="cancelled" />
             ))}
           </ul>
         </section>
       )}
 
       {past.length > 0 && (
-        <section>
-          <h2 className="mb-2 text-lg font-semibold">Прошедшие</h2>
-          <ul className="flex flex-col gap-3 opacity-75">
+        <section className="mt-10" aria-labelledby="past-h">
+          <h2 id="past-h" className="mb-3 font-display text-lg font-semibold text-zinc-500">
+            Прошедшие
+          </h2>
+          <ul className="flex flex-col gap-3">
             {past.map((e) => (
-              <EventCard key={e.id} e={e} pastView />
+              <EventCard key={e.id} e={e} kind="past" />
             ))}
           </ul>
         </section>
       )}
-    </div>
+    </Container>
   );
 }
 
-// Страница зависит от сессии/БД: рендерим блокирующе на сервере
+// Страница зависит от БД и текущего времени: рендерим блокирующе на сервере
 export const instant = false;

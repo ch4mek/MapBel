@@ -33,6 +33,13 @@ export interface MapPlaceDTO {
   lon: number;
   zoneId: string;
   visited: boolean;
+  shortDescription: string;
+}
+
+function shorten(text: string, max = 140): string {
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max);
+  return cut.slice(0, cut.lastIndexOf(" ")).replace(/[,.;:—-]+$/, "") + "…";
 }
 
 /** Все зоны для карты + персональный прогресс (если вошёл). */
@@ -83,6 +90,7 @@ export async function getMapPlaces(userId: string | null): Promise<MapPlaceDTO[]
       lat: true,
       lon: true,
       zoneId: true,
+      description: true,
     },
     orderBy: { name: "asc" },
   });
@@ -103,6 +111,7 @@ export async function getMapPlaces(userId: string | null): Promise<MapPlaceDTO[]
     lon: p.lon.toNumber(),
     zoneId: p.zoneId,
     visited: visitedSet.has(p.id),
+    shortDescription: shorten(p.description),
   }));
 }
 

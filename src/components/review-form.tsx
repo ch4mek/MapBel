@@ -1,7 +1,13 @@
 "use client";
 
-import { useActionState } from "react";
+import Link from "next/link";
+import { useActionState, useState } from "react";
+import { CircleCheck, CircleAlert } from "lucide-react";
 import { upsertReviewAction, type ActionResult } from "@/lib/actions/social";
+import { Alert } from "@/components/ui/primitives";
+import { cn } from "@/lib/cn";
+
+const RATING_WORDS = ["", "Плохо", "Так себе", "Нормально", "Хорошо", "Отлично"];
 
 export function ReviewForm({
   placeId,
@@ -12,42 +18,55 @@ export function ReviewForm({
   authorized: boolean;
   existing?: { rating: number; text: string | null; tips: string | null } | null;
 }) {
-  const [state, formAction, pending] = useActionState<ActionResult, FormData>(
-    upsertReviewAction,
-    {},
-  );
+  const [state, formAction, pending] = useActionState<ActionResult, FormData>(upsertReviewAction, {});
+  const [rating, setRating] = useState(existing?.rating ?? 0);
+  const [hover, setHover] = useState(0);
 
   if (!authorized) {
     return (
-      <p className="text-sm text-[var(--muted)]">
-        <a href="/login" className="text-[var(--brand)] underline">
+      <p className="rounded-xl bg-zinc-50 p-4 text-sm text-zinc-600">
+        <Link href="/login" className="font-semibold text-forest-700 hover:underline">
           Войдите
-        </a>
-        , чтобы оставить отзыв.
+        </Link>
+        , чтобы поделиться впечатлениями о месте.
       </p>
     );
   }
 
+  const shown = hover || rating;
+
   return (
-    <form action={formAction} className="flex flex-col gap-3">
+    <form action={formAction} className="flex flex-col gap-4">
       <input type="hidden" name="placeId" value={placeId} />
-      <div>
-        <label className="label" htmlFor="review-rating">
-          Оценка
-        </label>
-        <select
-          id="review-rating"
-          name="rating"
-          className="input"
-          defaultValue={existing?.rating ?? 5}
-        >
-          {[5, 4, 3, 2, 1].map((r) => (
-            <option key={r} value={r}>
-              {"★".repeat(r)}{"☆".repeat(5 - r)} ({r})
-            </option>
-          ))}
-        </select>
-      </div>
+      <input type="hidden" name="rating" value={rating} />
+      <fieldset>
+        <legend className="label">Ваша оценка</legend>
+        <div className="flex items-center gap-3">
+          <div className="flex" onMouseLeave={() => setHover(0)}>
+            {[1, 2, 3, 4, 5].map((i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => setRating(i)}
+                onMouseEnter={() => setHover(i)}
+                aria-label={`${i} из 5`}
+                aria-pressed={rating === i}
+                className="rounded-md p-0.5 transition hover:scale-110 focus-visible:ring-2 focus-visible:ring-forest-500 focus-visible:outline-none"
+              >
+                <svg
+                  viewBox="0 0 20 20"
+                  className={cn("size-8", i <= shown ? "text-amber-400" : "text-zinc-200")}
+                  fill="currentColor"
+                  aria-hidden
+                >
+                  <path d="M10 1.6l2.5 5.3 5.8.7-4.3 4 1.1 5.7L10 14.5l-5.1 2.8 1.1-5.7-4.3-4 5.8-.7L10 1.6z" />
+                </svg>
+              </button>
+            ))}
+          </div>
+          <span className="text-sm font-semibold text-zinc-600">{RATING_WORDS[shown]}</span>
+        </div>
+      </fieldset>
       <div>
         <label className="label" htmlFor="review-text">
           Впечатления
@@ -55,35 +74,36 @@ export function ReviewForm({
         <textarea
           id="review-text"
           name="text"
-          className="input min-h-24"
+          className="input"
           maxLength={5000}
-          placeholder="Что понравилось, что стоит знать заранее?"
+          placeholder="Что понравилось, что удивило?"
           defaultValue={existing?.text ?? ""}
         />
       </div>
       <div>
         <label className="label" htmlFor="review-tips">
-          Практические советы (логистика, парковка, билеты)
+          Практические советы
         </label>
         <textarea
           id="review-tips"
           name="tips"
           className="input min-h-16"
           maxLength={2000}
+          placeholder="Парковка, билеты, лучшее время для визита…"
           defaultValue={existing?.tips ?? ""}
         />
       </div>
       {state.error && (
-        <p className="text-sm text-[var(--danger)]" role="alert">
+        <Alert tone="danger" icon={CircleAlert}>
           {state.error}
-        </p>
+        </Alert>
       )}
       {state.ok && (
-        <p className="text-sm text-emerald-700" role="status">
-          Отзыв сохранён.
-        </p>
+        <Alert tone="success" icon={CircleCheck}>
+          Отзыв сохранён — спасибо!
+        </Alert>
       )}
-      <button className="btn btn-primary w-fit" disabled={pending} type="submit">
+      <button className="btn btn-primary self-start" disabled={pending || rating === 0} type="submit">
         {pending ? "Сохраняем…" : existing ? "Обновить отзыв" : "Опубликовать отзыв"}
       </button>
     </form>

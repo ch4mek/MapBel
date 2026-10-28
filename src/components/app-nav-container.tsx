@@ -1,31 +1,44 @@
 import { Suspense } from "react";
+import { connection } from "next/server";
 import { auth } from "@/auth";
-import { AppNav } from "@/components/app-nav";
+import { prisma } from "@/lib/prisma";
+import { levelForXp } from "@/config/game";
+import { AppNav, AppNavSkeleton } from "@/components/app-nav";
 
 /**
  * Сессия читается внутри Suspense-границы: корневой layout остаётся
- * пригодным для пререндера (в т.ч. /_not-found), а навигация
- * дорендеривается на сервере, когда сессия известна.
+ * пригодным для пререндера, а шапка дорендеривается, когда сессия известна.
  */
 async function NavData() {
+  await connection();
   const session = await auth();
-  const user = session?.user
-    ? {
+  if (!session?.user?.id) return <AppNav user={null} />;
+
+  const [xpAgg, pendingFriends, pendingTrips, pendingTags] = await Promise.all([
+    prisma.rewardEvent.aggregate({ where: { userId: session.user.id }, _sum: { xp: true } }),
+    prisma.friendship.count({ where: { addresseeId: session.user.id, status: "PENDING" } }),
+    prisma.tripMember.count({ where: { userId: session.user.id, inviteStatus: "PENDING" } }),
+    prisma.photoTag.count({ where: { taggedUserId: session.user.id, status: "PENDING" } }),
+  ]);
+  const xp = xpAgg._sum.xp ?? 0;
+
+  return (
+    <AppNav
+      user={{
         displayName: session.user.name ?? session.user.username,
         username: session.user.username,
-        role: session.user.role as string,
-      }
-    : null;
-  return <AppNav user={user} />;
-}
-
-function NavFallback() {
-  return <div className="ml-auto h-8 w-40 animate-pulse rounded bg-gray-100" />;
+        role: session.user.role,
+        level: levelForXp(xp),
+        xp,
+      }}
+      badges={{ friends: pendingFriends, trips: pendingTrips, diary: pendingTags }}
+    />
+  );
 }
 
 export function AppNavContainer() {
   return (
-    <Suspense fallback={<NavFallback />}>
+    <Suspense fallback={<AppNavSkeleton />}>
       <NavData />
     </Suspense>
   );

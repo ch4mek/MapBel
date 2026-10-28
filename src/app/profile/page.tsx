@@ -9,7 +9,7 @@ export default async function ProfilePage() {
   if (!session?.user) redirect("/login");
   const data = await getProfileData(session.user.id, session.user.id);
   if (!data) notFound();
-  return <ProfileView data={data} />;
+  return <ProfileView data={data} isSelf />;
 }
 
 // Страница зависит от сессии/БД: рендерим блокирующе на сервере

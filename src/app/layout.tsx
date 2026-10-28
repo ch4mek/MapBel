@@ -1,10 +1,25 @@
 import type { Metadata, Viewport } from "next";
-import Link from "next/link";
+import { Manrope, Unbounded } from "next/font/google";
 import "./globals.css";
 import { AppNavContainer } from "@/components/app-nav-container";
 
+const manrope = Manrope({
+  subsets: ["latin", "cyrillic"],
+  variable: "--font-manrope",
+  display: "swap",
+});
+
+const unbounded = Unbounded({
+  subsets: ["latin", "cyrillic"],
+  variable: "--font-unbounded",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
-  title: "MapBel — открывай Беларусь",
+  title: {
+    default: "MapBel — открывай Беларусь",
+    template: "%s · MapBel",
+  },
   description:
     "Геймифицированный дневник путешествий по Беларуси: зоны открытий, подтверждение посещений, достижения и совместные поездки.",
 };
@@ -12,41 +27,29 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#176b52",
+  viewportFit: "cover",
+  themeColor: "#185e43",
 };
 
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="ru">
-      <body className="flex min-h-dvh flex-col">
-        <header className="sticky top-0 z-40 border-b bg-white/95 backdrop-blur">
-          <div className="mx-auto flex h-14 w-full max-w-6xl items-center gap-3 px-4">
-            <Link href="/" className="flex items-center gap-2 text-lg font-bold">
-              <span aria-hidden>🗺️</span>
-              <span>
-                Map<span className="text-[var(--brand)]">Bel</span>
-              </span>
-            </Link>
-            <AppNavContainer />
-          </div>
-        </header>
-        <main className="mx-auto w-full max-w-6xl flex-1 px-4 pt-4 pb-24 md:pb-8">
+    <html lang="ru" className={`${manrope.variable} ${unbounded.variable}`}>
+      <body className="flex min-h-dvh flex-col font-sans">
+        <a
+          href="#main"
+          className="sr-only z-[100] rounded-lg bg-white px-4 py-2 font-semibold focus:not-sr-only focus:fixed focus:top-3 focus:left-3"
+        >
+          Перейти к содержимому
+        </a>
+        <AppNavContainer />
+        <main
+          id="main"
+          className="flex flex-1 flex-col pb-[calc(4.25rem+env(safe-area-inset-bottom))] lg:pb-0"
+        >
           {children}
         </main>
-        <footer className="hidden border-t bg-white py-4 text-center text-xs text-[var(--muted)] md:block">
-          MapBel — учебный проект. Данные зон и мест демонстрационные. Карта ©{" "}
-          <a
-            className="underline"
-            href="https://www.openstreetmap.org/copyright"
-            target="_blank"
-            rel="noreferrer"
-          >
-            OpenStreetMap
-          </a>{" "}
-          contributors.
-        </footer>
       </body>
     </html>
   );

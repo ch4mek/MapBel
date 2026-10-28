@@ -2,49 +2,38 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import {
-  respondPhotoTagAction,
-  removePhotoTagAction,
-} from "@/lib/actions/diary";
+import { Check, X } from "lucide-react";
+import { respondPhotoTagAction, removePhotoTagAction } from "@/lib/actions/diary";
 
-export function TagActions({
-  tagId,
-  kind,
-}: {
-  tagId: string;
-  kind: "respond" | "remove";
-}) {
+export function TagActions({ tagId, kind }: { tagId: string; kind: "respond" | "remove" }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+
+  const run = (fn: () => Promise<unknown>) =>
+    startTransition(async () => {
+      await fn();
+      router.refresh();
+    });
 
   if (kind === "respond") {
     return (
       <span className="flex gap-1.5">
         <button
           type="button"
-          className="btn btn-primary !min-h-0 !px-2 !py-1 text-xs"
+          className="btn btn-primary btn-sm"
           disabled={pending}
-          onClick={() =>
-            startTransition(async () => {
-              await respondPhotoTagAction(tagId, true);
-              router.refresh();
-            })
-          }
+          onClick={() => run(() => respondPhotoTagAction(tagId, true))}
         >
-          ✔ Принять
+          <Check className="size-3.5" />
+          Принять
         </button>
         <button
           type="button"
-          className="btn btn-ghost !min-h-0 !px-2 !py-1 text-xs"
+          className="btn btn-secondary btn-sm"
           disabled={pending}
-          onClick={() =>
-            startTransition(async () => {
-              await respondPhotoTagAction(tagId, false);
-              router.refresh();
-            })
-          }
+          onClick={() => run(() => respondPhotoTagAction(tagId, false))}
         >
-          ✖ Отклонить
+          Отклонить
         </button>
       </span>
     );
@@ -52,16 +41,13 @@ export function TagActions({
   return (
     <button
       type="button"
-      className="btn btn-ghost !min-h-0 !px-2 !py-1 text-xs"
+      className="grid size-5 place-items-center rounded-full text-zinc-400 hover:bg-zinc-200 hover:text-zinc-700"
       disabled={pending}
-      onClick={() =>
-        startTransition(async () => {
-          await removePhotoTagAction(tagId);
-          router.refresh();
-        })
-      }
+      onClick={() => run(() => removePhotoTagAction(tagId))}
+      aria-label="Убрать отметку"
+      title="Убрать отметку"
     >
-      Убрать отметку
+      <X className="size-3" />
     </button>
   );
 }

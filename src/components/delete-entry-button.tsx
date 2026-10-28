@@ -2,7 +2,9 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { CircleAlert, Trash2 } from "lucide-react";
 import { deleteDiaryEntryAction } from "@/lib/actions/diary";
+import { Alert } from "@/components/ui/primitives";
 
 export function DeleteEntryButton({ entryId }: { entryId: string }) {
   const router = useRouter();
@@ -23,31 +25,28 @@ export function DeleteEntryButton({ entryId }: { entryId: string }) {
 
   if (!confirming) {
     return (
-      <button
-        type="button"
-        className="btn btn-danger w-fit"
-        onClick={() => setConfirming(true)}
-      >
-        🗑 Удалить запись
+      <button type="button" className="btn btn-danger-soft btn-sm" onClick={() => setConfirming(true)}>
+        <Trash2 className="size-4" />
+        Удалить запись
       </button>
     );
   }
   return (
-    <div className="card border-[var(--danger)] p-4">
-      <p className="text-sm">
-        Удалить запись? Фотографии будут удалены вместе с ней, но подтверждённые
-        визиты и очки сохранятся.
+    <div className="animate-fade-in rounded-2xl border border-red-200 bg-red-50 p-4">
+      <p className="text-sm font-semibold text-red-900">Удалить запись вместе с фотографиями?</p>
+      <p className="mt-1 text-sm text-red-800/80">
+        Подтверждённые визиты, очки и открытые зоны сохранятся.
       </p>
       {error && (
-        <p className="mt-2 text-sm text-[var(--danger)]" role="alert">
+        <Alert tone="danger" icon={CircleAlert} className="mt-3">
           {error}
-        </p>
+        </Alert>
       )}
       <div className="mt-3 flex gap-2">
-        <button type="button" className="btn btn-danger" onClick={remove} disabled={pending}>
-          Да, удалить
+        <button type="button" className="btn btn-danger btn-sm" onClick={remove} disabled={pending}>
+          {pending ? "Удаляем…" : "Да, удалить"}
         </button>
-        <button type="button" className="btn btn-ghost" onClick={() => setConfirming(false)}>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={() => setConfirming(false)}>
           Отмена
         </button>
       </div>
